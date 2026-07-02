@@ -13,6 +13,12 @@ final class Recorder {
     private var samples: [Float] = []
     private var level: Float = 0
     private let lock = NSLock()
+    private var hasSpeech = false
+    private var silentFrames = 0
+    private var autoStopFired = false
+    /// Set by the caller before each recording; enables silence auto-stop.
+    var autoStopEnabled = false
+    var onAutoStop: (() -> Void)?
 
     /// Smoothed mic input level (0…1) for the menu bar level meter.
     var currentLevel: Float {
@@ -41,6 +47,9 @@ final class Recorder {
         lock.lock()
         samples.removeAll()
         level = 0
+        hasSpeech = false
+        silentFrames = 0
+        autoStopFired = false
         lock.unlock()
 
         let input = engine.inputNode
@@ -100,6 +109,23 @@ final class Recorder {
         lock.lock()
         samples.append(contentsOf: converted)
         level = level * 0.5 + min(1.0, rms * 12) * 0.5
+        var shouldFireAutoStop = false
+        if level >= 0.12 {
+            hasSpeech = true
+            silentFrames = 0
+        } else if hasSpeech && level < 0.06 {
+            silentFrames += Int(output.frameLength)
+            if silentFrames >= 32000 && !autoStopFired {
+                autoStopFired = true
+                shouldFireAutoStop = true
+            }
+        } else if hasSpeech {
+            silentFrames = 0
+        }
         lock.unlock()
+
+        if shouldFireAutoStop && autoStopEnabled {
+            DispatchQueue.main.async { self.onAutoStop?() }
+        }
     }
 }

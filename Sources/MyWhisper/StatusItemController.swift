@@ -130,6 +130,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         soundItem.state = Settings.shared.soundCues ? .on : .off
         menu.addItem(soundItem)
 
+        let autoStopItem = NSMenuItem(title: "Auto-Stop After Silence", action: #selector(toggleAutoStop), keyEquivalent: "")
+        autoStopItem.target = self
+        autoStopItem.state = Settings.shared.autoStopEnabled ? .on : .off
+        menu.addItem(autoStopItem)
+
         menu.addItem(.separator())
         let logItem = NSMenuItem(title: "Open Server Log", action: #selector(openLog), keyEquivalent: "")
         logItem.target = self
@@ -196,6 +201,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func toggleSoundCues() {
         Settings.shared.soundCues.toggle()
+    }
+
+    @objc private func toggleAutoStop() {
+        Settings.shared.autoStopEnabled.toggle()
     }
 
     @objc private func openModelsFolder() {

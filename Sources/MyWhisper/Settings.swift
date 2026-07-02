@@ -61,6 +61,12 @@ final class Settings {
         set { defaults.set(newValue, forKey: "soundCues") }
     }
 
+    /// Automatically stop recording after a period of silence. Default off.
+    var autoStopEnabled: Bool {
+        get { defaults.object(forKey: "autoStopEnabled") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "autoStopEnabled") }
+    }
+
     func availableModels() -> [URL] {
         let files = (try? FileManager.default.contentsOfDirectory(
             at: Self.modelsDir, includingPropertiesForKeys: nil)) ?? []

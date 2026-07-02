@@ -5,6 +5,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotKeys = HotKeyManager()
     private let recorder = Recorder()
     private var server: WhisperServerManager?
+    private var lastPressDate: Date?
+    private var pressStartedRecording = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusController.onToggleDictation = { [weak self] in self?.toggleDictation() }
@@ -16,9 +18,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusController.onChangeHotKey = { [weak self] in self?.beginHotKeyCapture() }
         statusController.levelProvider = { [weak self] in self?.recorder.currentLevel ?? 0 }
 
-        hotKeys.onHotKey = { [weak self] in self?.toggleDictation() }
+        hotKeys.onHotKeyDown = { [weak self] in self?.hotKeyDown() }
+        hotKeys.onHotKeyUp = { [weak self] in self?.hotKeyUp() }
         hotKeys.register(keyCode: Settings.shared.hotKeyCode,
                          modifiers: Settings.shared.hotKeyModifiers)
+
+        recorder.onAutoStop = { [weak self] in
+            guard self?.recorder.isRecording == true else { return }
+            self?.finishDictation()
+        }
 
         recorder.requestPermission { granted in
             if !granted {
@@ -86,10 +94,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startServer()
     }
 
-    private func toggleDictation() {
+    // Quick tap toggles recording on/off; press-and-hold records while held
+    // and stops on release (only once held past the tap threshold).
+    private func hotKeyDown() {
         if recorder.isRecording {
+            pressStartedRecording = false
             finishDictation()
         } else {
+            pressStartedRecording = true
+            lastPressDate = Date()
+            beginDictation()
+        }
+    }
+
+    private func hotKeyUp() {
+        guard recorder.isRecording, pressStartedRecording,
+              let lastPressDate, Date().timeIntervalSince(lastPressDate) >= 0.35 else { return }
+        finishDictation()
+    }
+
+    /// Emulates a tap from the status menu: down-only, so a stray key-up
+    /// from the physical hotkey never stops a menu-started recording.
+    private func toggleDictation() {
+        if recorder.isRecording {
+            pressStartedRecording = false
+            finishDictation()
+        } else {
+            pressStartedRecording = false
             beginDictation()
         }
     }
@@ -101,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         _ = server
         do {
+            recorder.autoStopEnabled = Settings.shared.autoStopEnabled
             try recorder.start()
             statusController.setStatus(.recording)
             if Settings.shared.soundCues { NSSound(named: "Pop")?.play() }

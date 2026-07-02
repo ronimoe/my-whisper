@@ -4,7 +4,8 @@ import Carbon
 /// Registers a system-wide hotkey via the Carbon RegisterEventHotKey API,
 /// which works without Accessibility permission.
 final class HotKeyManager {
-    var onHotKey: (() -> Void)?
+    var onHotKeyDown: (() -> Void)?
+    var onHotKeyUp: (() -> Void)?
     private var hotKeyRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?
 
@@ -34,17 +35,27 @@ final class HotKeyManager {
 
     private func installHandlerIfNeeded() {
         guard handlerRef == nil else { return }
-        var eventType = EventTypeSpec(
-            eventClass: OSType(kEventClassKeyboard),
-            eventKind: UInt32(kEventHotKeyPressed))
+        var eventTypes = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
+                         eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
+                         eventKind: UInt32(kEventHotKeyReleased))
+        ]
 
         let selfPointer = Unmanaged.passUnretained(self).toOpaque()
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, userData in
-            guard let userData else { return noErr }
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, userData in
+            guard let userData, let event else { return noErr }
             let manager = Unmanaged<HotKeyManager>.fromOpaque(userData).takeUnretainedValue()
-            DispatchQueue.main.async { manager.onHotKey?() }
+            let kind = GetEventKind(event)
+            DispatchQueue.main.async {
+                if kind == UInt32(kEventHotKeyPressed) {
+                    manager.onHotKeyDown?()
+                } else if kind == UInt32(kEventHotKeyReleased) {
+                    manager.onHotKeyUp?()
+                }
+            }
             return noErr
-        }, 1, &eventType, selfPointer, &handlerRef)
+        }, 2, &eventTypes, selfPointer, &handlerRef)
     }
 
     deinit {
