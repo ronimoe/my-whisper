@@ -154,12 +154,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let language = Settings.shared.language
         let translate = Settings.shared.translateToEnglish
         let lexicon = Lexicon.load()
+        let params = CodeSwitch.requestParameters(language: language,
+                                                   primary: Settings.shared.mixedPrimary,
+                                                   vocabularyPrompt: lexicon.vocabularyPrompt)
 
         Task {
             do {
-                let raw = try await server.transcribe(wavData: wav, language: language,
+                let raw = try await server.transcribe(wavData: wav, language: params.language,
                                                        translate: translate,
-                                                       prompt: lexicon.vocabularyPrompt)
+                                                       prompt: params.prompt)
                 let candidate = lexicon.apply(to: Postprocess.clean(raw))
                 let modeName = Settings.shared.currentModeName
                 let text: String

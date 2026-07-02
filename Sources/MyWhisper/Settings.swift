@@ -17,10 +17,17 @@ final class Settings {
         return dir
     }
 
-    /// Whisper language code, or "auto" for detection.
+    /// Whisper language code, or "auto" for detection, or "mixed" for
+    /// code-switched dictation (see CodeSwitch).
     var language: String {
         get { defaults.string(forKey: "language") ?? "auto" }
         set { defaults.set(newValue, forKey: "language") }
+    }
+
+    /// Primary language pinned to whisper when `language == "mixed"`.
+    var mixedPrimary: String {
+        get { defaults.string(forKey: "mixedPrimary") ?? "id" }
+        set { defaults.set(newValue, forKey: "mixedPrimary") }
     }
 
     /// Explicit model path; when nil, the best model found in modelsDir is used.
@@ -110,6 +117,7 @@ final class Settings {
 
     static let languages: [(code: String, name: String)] = [
         ("auto", "Auto-detect"),
+        ("mixed", "Mixed (Indonesian + English)"),
         ("en", "English"), ("id", "Indonesian"), ("zh", "Chinese"), ("es", "Spanish"),
         ("fr", "French"), ("de", "German"), ("ja", "Japanese"), ("ko", "Korean"),
         ("pt", "Portuguese"), ("ru", "Russian"), ("ar", "Arabic"), ("hi", "Hindi"),

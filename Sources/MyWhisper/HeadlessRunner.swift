@@ -49,13 +49,16 @@ final class HeadlessRunner {
         }
 
         let lexicon = Lexicon.load()
+        let params = CodeSwitch.requestParameters(language: language,
+                                                   primary: Settings.shared.mixedPrimary,
+                                                   vocabularyPrompt: lexicon.vocabularyPrompt)
         let box = ResultBox()
         let done = DispatchSemaphore(value: 0)
         Task.detached {
             do {
-                let raw = try await server.transcribe(wavData: wav, language: language,
+                let raw = try await server.transcribe(wavData: wav, language: params.language,
                                                        translate: translate,
-                                                       prompt: lexicon.vocabularyPrompt)
+                                                       prompt: params.prompt)
                 let candidate = lexicon.apply(to: Postprocess.clean(raw))
                 var text = candidate
                 if modeName != "Raw", let mode = ModeStore.load().first(where: { $0.name == modeName }) {
