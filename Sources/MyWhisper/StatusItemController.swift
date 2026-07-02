@@ -155,6 +155,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         voiceCommandsItem.state = Settings.shared.voiceCommandsEnabled ? .on : .off
         menu.addItem(voiceCommandsItem)
 
+        let livePreviewItem = NSMenuItem(title: "Live Preview", action: #selector(toggleLivePreview), keyEquivalent: "")
+        livePreviewItem.target = self
+        livePreviewItem.state = Settings.shared.livePreviewEnabled ? .on : .off
+        menu.addItem(livePreviewItem)
+
         let translateItem = NSMenuItem(title: "Translate to English", action: #selector(toggleTranslate), keyEquivalent: "")
         translateItem.target = self
         translateItem.state = Settings.shared.translateToEnglish ? .on : .off
@@ -272,6 +277,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func toggleVoiceCommands() {
         Settings.shared.voiceCommandsEnabled.toggle()
+    }
+
+    @objc private func toggleLivePreview() {
+        Settings.shared.livePreviewEnabled.toggle()
     }
 
     @objc private func toggleLaunchAtLogin() {

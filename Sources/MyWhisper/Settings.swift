@@ -87,6 +87,13 @@ final class Settings {
         set { defaults.set(newValue, forKey: "voiceCommandsEnabled") }
     }
 
+    /// Show a floating HUD with a live partial transcript while recording.
+    /// Default on.
+    var livePreviewEnabled: Bool {
+        get { defaults.object(forKey: "livePreview") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "livePreview") }
+    }
+
     /// Name of the active AI mode ("Raw" disables post-processing).
     var currentModeName: String {
         get { defaults.string(forKey: "currentModeName") ?? "Raw" }

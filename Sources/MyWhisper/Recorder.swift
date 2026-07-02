@@ -24,6 +24,13 @@ final class Recorder {
         defer { lock.unlock() }
         return level
     }
+
+    /// Number of samples captured so far in the current recording.
+    var sampleCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return samples.count
+    }
     private let targetFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false)!
     private(set) var isRecording = false
@@ -75,6 +82,14 @@ final class Recorder {
         let result = samples
         samples = []
         return result
+    }
+
+    /// Lock-guarded copy of the last `maxSamples` captured so far, for live
+    /// preview transcription. Safe to call while recording is in progress.
+    func snapshotSamples(maxSamples: Int) -> [Float] {
+        lock.lock()
+        defer { lock.unlock() }
+        return PartialScheduler.windowed(samples, maxSamples: maxSamples)
     }
 
     private func append(buffer: AVAudioPCMBuffer) {

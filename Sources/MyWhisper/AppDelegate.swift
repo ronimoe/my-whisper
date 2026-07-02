@@ -7,6 +7,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var server: WhisperServerManager?
     private var lastPressDate: Date?
     private var pressStartedRecording = false
+    private var previewTimer: Timer?
+    private var previewScheduler = PartialScheduler()
+    private var previewInFlight = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusController.onToggleDictation = { [weak self] in self?.toggleDictation() }
@@ -88,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func restartServer() {
+        stopPreviewTimer()
         if recorder.isRecording { _ = recorder.stop() }
         server?.stop()
         server = nil
@@ -136,12 +140,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try recorder.start()
             statusController.setStatus(.recording)
             if Settings.shared.soundCues { NSSound(named: "Pop")?.play() }
+            if Settings.shared.livePreviewEnabled {
+                startPreviewTimer()
+            }
         } catch {
             statusController.setStatus(.error(error.localizedDescription))
         }
     }
 
+    private func startPreviewTimer() {
+        previewScheduler.reset()
+        previewInFlight = false
+        previewTimer?.invalidate()
+        let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.previewTick()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        previewTimer = timer
+    }
+
+    private func stopPreviewTimer() {
+        previewTimer?.invalidate()
+        previewTimer = nil
+        PreviewHUD.shared.hide()
+    }
+
+    private func previewTick() {
+        guard recorder.isRecording else { return }
+        let now = Date().timeIntervalSinceReferenceDate
+        guard previewScheduler.shouldFire(now: now, samplesAvailable: recorder.sampleCount,
+                                          inFlight: previewInFlight) else { return }
+        guard let server else { return }
+        previewInFlight = true
+        let snapshot = recorder.snapshotSamples(maxSamples: 30 * 16000)
+        let language = Settings.shared.language
+        let translate = Settings.shared.translateToEnglish
+        let lexicon = Lexicon.load()
+        let params = CodeSwitch.requestParameters(language: language,
+                                                   primary: Settings.shared.mixedPrimary,
+                                                   vocabularyPrompt: lexicon.vocabularyPrompt)
+        Task {
+            let raw = try? await server.transcribe(wavData: WavWriter.data(fromSamples: snapshot),
+                                                    language: params.language,
+                                                    translate: translate,
+                                                    prompt: params.prompt)
+            await MainActor.run {
+                self.previewInFlight = false
+                if self.recorder.isRecording, let raw {
+                    let text = Postprocess.clean(raw)
+                    if !text.isEmpty {
+                        PreviewHUD.shared.update(text: text)
+                    }
+                }
+            }
+        }
+    }
+
     private func finishDictation() {
+        stopPreviewTimer()
         let samples = recorder.stop()
         if Settings.shared.soundCues { NSSound(named: "Tink")?.play() }
         guard samples.count > 3200 else { // ignore recordings under 0.2 s
