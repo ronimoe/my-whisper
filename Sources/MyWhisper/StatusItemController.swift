@@ -126,6 +126,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         hotkeyItem.target = self
         menu.addItem(hotkeyItem)
 
+        let historyItem = NSMenuItem(title: "History…",
+                                     action: #selector(openHistory), keyEquivalent: "")
+        historyItem.target = self
+        menu.addItem(historyItem)
+
         let replacementsItem = NSMenuItem(title: "Edit Text Replacements…",
                                           action: #selector(editTextReplacements), keyEquivalent: "")
         replacementsItem.target = self
@@ -238,6 +243,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                 Notifier.show(title: "Couldn't enable Launch at Login", body: error.localizedDescription)
             }
         }
+    }
+
+    @objc private func openHistory() {
+        HistoryWindowController.shared.show()
     }
 
     @objc private func editTextReplacements() {

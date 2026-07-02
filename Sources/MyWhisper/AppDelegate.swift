@@ -169,6 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         Notifier.show(title: "Copied to clipboard",
                                       body: "Grant Accessibility permission to paste automatically.")
                     }
+                    HistoryStore.shared.append(text: text, language: language)
                 }
             } catch {
                 await MainActor.run {
