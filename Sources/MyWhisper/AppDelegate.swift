@@ -4,7 +4,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let statusController = StatusItemController()
     private let hotKeys = HotKeyManager()
     private let recorder = Recorder()
-    private var server: WhisperServerManager?
+    private var engine: (any TranscriptionEngine)?
     private var lastPressDate: Date?
     private var pressStartedRecording = false
     private var previewTimer: Timer?
@@ -17,6 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusController.onSelectLanguage = { code in Settings.shared.language = code }
         statusController.onSelectModel = { [weak self] url in
             Settings.shared.modelPath = url.path
+            self?.restartServer()
+        }
+        statusController.onSelectEngine = { [weak self] engine in
+            Settings.shared.engine = engine
             self?.restartServer()
         }
         statusController.onChangeHotKey = { [weak self] in self?.beginHotKeyCapture() }
@@ -46,14 +50,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        server?.stop()
+        engine?.stop()
     }
 
     private func startServer() {
-        guard let binary = WhisperServerManager.locateServerBinary() else {
-            statusController.setStatus(.error("whisper-server not found — brew install whisper-cpp"))
-            return
-        }
         guard let model = Settings.shared.resolveModelURL() else {
             statusController.setStatus(.error("No model — run: make model"))
             return
@@ -62,10 +62,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusController.setModelName(name)
         statusController.setStatus(.loading("Loading \(name)…"))
 
-        let server = WhisperServerManager(serverBinary: binary, modelURL: model,
+        let engine: any TranscriptionEngine
+        if Settings.shared.engine == "inprocess" {
+            engine = WhisperEngine(modelURL: model)
+        } else {
+            guard let binary = WhisperServerManager.locateServerBinary() else {
+                statusController.setStatus(.error("whisper-server not found — brew install whisper-cpp"))
+                return
+            }
+            engine = WhisperServerManager(serverBinary: binary, modelURL: model,
                                           port: Settings.shared.serverPort)
-        self.server = server
-        server.onStateChange = { [weak self] state in
+        }
+        self.engine = engine
+        engine.onStateChange = { [weak self] state in
             DispatchQueue.main.async {
                 switch state {
                 case .ready: self?.statusController.setStatus(.idle)
@@ -74,7 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
-        server.start()
+        engine.start()
     }
 
     func beginHotKeyCapture() {
@@ -97,8 +106,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func restartServer() {
         stopPreviewTimer()
         if recorder.isRecording { _ = recorder.stop() }
-        server?.stop()
-        server = nil
+        engine?.stop()
+        engine = nil
         startServer()
     }
 
@@ -134,11 +143,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func beginDictation() {
-        guard let server, case .ready = server.state else {
+        guard let engine, case .ready = engine.state else {
             Notifier.show(title: "Model still loading", body: "Try again in a few seconds.")
             return
         }
-        _ = server
+        _ = engine
         dictationContext = ModeContext.capture()
         do {
             recorder.autoStopEnabled = Settings.shared.autoStopEnabled
@@ -175,7 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let now = Date().timeIntervalSinceReferenceDate
         guard previewScheduler.shouldFire(now: now, samplesAvailable: recorder.sampleCount,
                                           inFlight: previewInFlight) else { return }
-        guard let server else { return }
+        guard let engine else { return }
         previewInFlight = true
         let snapshot = recorder.snapshotSamples(maxSamples: 30 * 16000)
         let language = Settings.shared.language
@@ -185,10 +194,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                    primary: Settings.shared.mixedPrimary,
                                                    vocabularyPrompt: lexicon.vocabularyPrompt)
         Task {
-            let raw = try? await server.transcribe(wavData: WavWriter.data(fromSamples: snapshot),
-                                                    language: params.language,
-                                                    translate: translate,
-                                                    prompt: params.prompt)
+            let raw = try? await engine.transcribe(samples: snapshot,
+                                                   language: params.language,
+                                                   translate: translate,
+                                                   prompt: params.prompt)
             await MainActor.run {
                 self.previewInFlight = false
                 if self.recorder.isRecording, let raw {
@@ -209,9 +218,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusController.setStatus(.idle)
             return
         }
-        guard let server else { return }
+        guard let engine else { return }
         statusController.setStatus(.transcribing)
-        let wav = WavWriter.data(fromSamples: samples)
         let language = Settings.shared.language
         let translate = Settings.shared.translateToEnglish
         let lexicon = Lexicon.load()
@@ -221,9 +229,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task {
             do {
-                let raw = try await server.transcribe(wavData: wav, language: params.language,
-                                                       translate: translate,
-                                                       prompt: params.prompt)
+                let raw = try await engine.transcribe(samples: samples, language: params.language,
+                                                      translate: translate,
+                                                      prompt: params.prompt)
                 var candidate = lexicon.apply(to: Postprocess.clean(raw))
 
                 if Settings.shared.voiceCommandsEnabled, !candidate.isEmpty,

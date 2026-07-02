@@ -12,6 +12,7 @@ if arguments.contains("--help") || arguments.contains("-h") {
           [--language <code|auto>]     Language override (default: saved setting)
           [--translate]                Translate the speech to English
           [--mode <name>]              Rewrite the result with an AI mode (default: saved setting)
+          [--engine server|inprocess]  Transcription backend (default: saved setting)
 
     The menu bar app toggles recording with the global hotkey (default ⌥Space),
     transcribes locally with whisper.cpp, and pastes the result into the
@@ -35,7 +36,12 @@ if let index = arguments.firstIndex(of: "--transcribe") {
     if let modeIndex = arguments.firstIndex(of: "--mode"), arguments.count > modeIndex + 1 {
         modeName = arguments[modeIndex + 1]
     }
-    exit(HeadlessRunner().run(wavPath: wavPath, language: language, translate: translate, modeName: modeName))
+    var engineOverride: String?
+    if let engineIndex = arguments.firstIndex(of: "--engine"), arguments.count > engineIndex + 1 {
+        engineOverride = arguments[engineIndex + 1]
+    }
+    exit(HeadlessRunner().run(wavPath: wavPath, language: language, translate: translate,
+                              modeName: modeName, engineOverride: engineOverride))
 }
 
 let app = NSApplication.shared

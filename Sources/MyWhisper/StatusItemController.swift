@@ -13,6 +13,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     var onToggleDictation: (() -> Void)?
     var onSelectLanguage: ((String) -> Void)?
     var onSelectModel: ((URL) -> Void)?
+    var onSelectEngine: ((String) -> Void)?
     var onChangeHotKey: (() -> Void)?
     /// Supplies the live mic level (0…1) for the recording animation.
     var levelProvider: (() -> Float)?
@@ -119,6 +120,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         let modelItem = NSMenuItem(title: "Model", action: nil, keyEquivalent: "")
         modelItem.submenu = buildModelMenu()
         menu.addItem(modelItem)
+
+        let engineItem = NSMenuItem(title: "Engine", action: nil, keyEquivalent: "")
+        engineItem.submenu = buildEngineMenu()
+        menu.addItem(engineItem)
 
         let modeItem = NSMenuItem(title: "Mode", action: nil, keyEquivalent: "")
         modeItem.submenu = buildModeMenu()
@@ -231,6 +236,22 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         return submenu
     }
 
+    private func buildEngineMenu() -> NSMenu {
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        let current = Settings.shared.engine
+        let options = [("server", "Server (subprocess)"),
+                       ("inprocess", "In-Process (experimental)")]
+        for (key, title) in options {
+            let entry = NSMenuItem(title: title, action: #selector(selectEngine(_:)), keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = key
+            entry.state = (key == current) ? .on : .off
+            submenu.addItem(entry)
+        }
+        return submenu
+    }
+
     @objc private func toggleDictation() { onToggleDictation?() }
 
     private func buildModeMenu() -> NSMenu {
@@ -269,6 +290,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc private func selectModel(_ sender: NSMenuItem) {
         guard let url = sender.representedObject as? URL else { return }
         onSelectModel?(url)
+    }
+
+    @objc private func selectEngine(_ sender: NSMenuItem) {
+        guard let key = sender.representedObject as? String else { return }
+        onSelectEngine?(key)
     }
 
     @objc private func changeHotKey() { onChangeHotKey?() }

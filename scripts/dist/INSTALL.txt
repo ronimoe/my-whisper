@@ -1,0 +1,40 @@
+MyWhisper — local voice dictation for macOS (Apple Silicon)
+=============================================================
+
+Dictate in ~100 languages with a hotkey. 100% offline: your voice
+never leaves your Mac. Free.
+
+INSTALL (one time, ~2 minutes)
+------------------------------
+
+1. Drag MyWhisper.app into your Applications folder.
+
+2. Double-click "Download Model.command" to fetch the speech model
+   (~1.5 GB, one time). If macOS blocks it: right-click the file →
+   Open → Open.
+
+3. Open MyWhisper.app. macOS will block it the first time because
+   this free build isn't notarized by Apple:
+   → System Settings → Privacy & Security → scroll down →
+     "MyWhisper.app was blocked…" → click "Open Anyway".
+
+4. Grant the two permissions it asks for:
+   - Microphone (to hear you)
+   - Accessibility (to paste text into other apps)
+
+USE
+---
+
+- Tap Option+Space, speak, tap again → text appears where your
+  cursor is. Hold Option+Space to talk-while-holding instead.
+- The waveform icon in the menu bar has everything else:
+  languages (including Mixed Indonesian+English), models, AI modes,
+  history, and Settings (Cmd+,).
+
+PRIVACY
+-------
+
+No accounts, no telemetry, no cloud. The only network connections
+the app makes are to itself (localhost). The one-time model
+download (step 2) fetches from Hugging Face; after that, everything
+is fully offline.

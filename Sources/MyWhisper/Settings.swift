@@ -40,6 +40,13 @@ final class Settings {
         defaults.object(forKey: "serverPort") as? Int ?? 8178
     }
 
+    /// Transcription backend: "server" (whisper-server subprocess) or
+    /// "inprocess" (libwhisper linked directly). Default "server".
+    var engine: String {
+        get { defaults.string(forKey: "engine") ?? "server" }
+        set { defaults.set(newValue, forKey: "engine") }
+    }
+
     /// Carbon virtual key code for the dictation hotkey. Default: Space (49).
     var hotKeyCode: UInt32 {
         defaults.object(forKey: "hotKeyCode") as? UInt32 ?? 49

@@ -2,13 +2,8 @@ import Foundation
 
 /// Owns a local whisper-server process (whisper.cpp) and talks to it over
 /// localhost HTTP. The model stays loaded in memory between dictations.
-final class WhisperServerManager {
-    enum State {
-        case stopped
-        case starting
-        case ready
-        case failed(String)
-    }
+final class WhisperServerManager: TranscriptionEngine {
+    typealias State = EngineState
 
     private(set) var state: State = .stopped {
         didSet { onStateChange?(state) }
@@ -128,6 +123,16 @@ final class WhisperServerManager {
     struct TranscriptionError: LocalizedError {
         let message: String
         var errorDescription: String? { message }
+    }
+
+    /// TranscriptionEngine conformance: encode the samples to a WAV in memory,
+    /// then hand off to the HTTP path the server understands.
+    func transcribe(samples: [Float], language: String, translate: Bool,
+                    prompt: String?) async throws -> String {
+        guard !samples.isEmpty else { return "" }
+        let wav = WavWriter.data(fromSamples: samples)
+        return try await transcribe(wavData: wav, language: language, translate: translate,
+                                    prompt: prompt)
     }
 
     func transcribe(wavData: Data, language: String, translate: Bool = false,

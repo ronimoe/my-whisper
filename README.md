@@ -194,10 +194,12 @@ test-first.
 - [x] Streaming preview (see words while you speak)
 - [x] Voice commands, spoken punctuation, mixed-language (code-switching) mode
 - [x] Context awareness ({app}/{selection} placeholders in AI-mode prompts)
-- [ ] In-process engine (link libwhisper directly, drop the server process)
-- [ ] Signed/notarized distribution build
-- [ ] Windows/Linux port (the engine is portable; the capture/paste layer
-      would need per-OS implementations)
+- [x] In-process engine (links libwhisper directly — menu → Engine →
+      In-Process; server subprocess remains the default)
+- [x] Free-download distribution (`make dist` → DMG with self-contained
+      server + model downloader). Notarized build: on hold until an Apple
+      Developer account exists.
+- [ ] Windows/Linux port — scoped and mapped in [PORTING.md](PORTING.md)
 
 ## License
 

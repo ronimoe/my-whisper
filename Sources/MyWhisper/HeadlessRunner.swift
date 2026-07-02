@@ -8,7 +8,8 @@ final class HeadlessRunner {
         var value: Result<String, Error>?
     }
 
-    func run(wavPath: String, language: String, translate: Bool = false, modeName: String = "Raw") -> Int32 {
+    func run(wavPath: String, language: String, translate: Bool = false, modeName: String = "Raw",
+             engineOverride: String? = nil) -> Int32 {
         let errOut = FileHandle.standardError
         func fail(_ message: String) -> Int32 {
             errOut.write(Data("error: \(message)\n".utf8))
@@ -18,19 +19,26 @@ final class HeadlessRunner {
         guard FileManager.default.fileExists(atPath: wavPath) else {
             return fail("file not found: \(wavPath)")
         }
-        guard let binary = WhisperServerManager.locateServerBinary() else {
-            return fail("whisper-server not found (brew install whisper-cpp, or make deps)")
-        }
         guard let model = Settings.shared.resolveModelURL() else {
             return fail("no model in \(Settings.modelsDir.path) — run: make model")
         }
-        errOut.write(Data("using model: \(model.lastPathComponent), language: \(language)\n".utf8))
 
-        let server = WhisperServerManager(serverBinary: binary, modelURL: model,
+        let engineKind = engineOverride ?? Settings.shared.engine
+        let engine: any TranscriptionEngine
+        if engineKind == "inprocess" {
+            engine = WhisperEngine(modelURL: model)
+        } else {
+            guard let binary = WhisperServerManager.locateServerBinary() else {
+                return fail("whisper-server not found (brew install whisper-cpp, or make deps)")
+            }
+            engine = WhisperServerManager(serverBinary: binary, modelURL: model,
                                           port: Settings.shared.serverPort)
+        }
+        errOut.write(Data("using model: \(model.lastPathComponent), language: \(language), engine: \(engineKind)\n".utf8))
+
         var startupError: String?
         let ready = DispatchSemaphore(value: 0)
-        server.onStateChange = { state in
+        engine.onStateChange = { state in
             switch state {
             case .ready: ready.signal()
             case .failed(let message):
@@ -39,13 +47,19 @@ final class HeadlessRunner {
             case .starting, .stopped: break
             }
         }
-        server.start()
+        engine.start()
         ready.wait()
         if let startupError { return fail(startupError) }
-        defer { server.stop() }
+        defer { engine.stop() }
 
         guard let wav = FileManager.default.contents(atPath: wavPath) else {
             return fail("could not read \(wavPath)")
+        }
+        let samples: [Float]
+        do {
+            samples = try WavReader.samples(fromWavData: wav)
+        } catch {
+            return fail(error.localizedDescription)
         }
 
         let lexicon = Lexicon.load()
@@ -56,9 +70,9 @@ final class HeadlessRunner {
         let done = DispatchSemaphore(value: 0)
         Task.detached {
             do {
-                let raw = try await server.transcribe(wavData: wav, language: params.language,
-                                                       translate: translate,
-                                                       prompt: params.prompt)
+                let raw = try await engine.transcribe(samples: samples, language: params.language,
+                                                      translate: translate,
+                                                      prompt: params.prompt)
                 var candidate = lexicon.apply(to: Postprocess.clean(raw))
                 if Settings.shared.spokenPunctuationEnabled {
                     candidate = SpokenPunctuation.apply(to: candidate)
