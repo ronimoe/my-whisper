@@ -1,9 +1,13 @@
 MODEL ?= large-v3-turbo
 
-.PHONY: build app run model deps clean
+.PHONY: build app run model deps clean test
 
 build:
 	swift build -c release
+
+# XCTest needs the full Xcode toolchain; Command Line Tools alone lacks it.
+test:
+	DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
 
 app: build
 	./scripts/make-app.sh

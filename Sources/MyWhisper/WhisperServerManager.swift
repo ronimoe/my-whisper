@@ -141,8 +141,8 @@ final class WhisperServerManager {
         let boundary = "mywhisper-\(UUID().uuidString)"
         request.setValue("multipart/form-data; boundary=\(boundary)",
                          forHTTPHeaderField: "Content-Type")
-        request.httpBody = multipartBody(boundary: boundary, wavData: wavData, language: language,
-                                         translate: translate, prompt: prompt)
+        request.httpBody = Self.multipartBody(boundary: boundary, wavData: wavData, language: language,
+                                              translate: translate, prompt: prompt)
 
         let (data, response) = try await URLSession.shared.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -159,8 +159,8 @@ final class WhisperServerManager {
         return decoded?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    private func multipartBody(boundary: String, wavData: Data, language: String,
-                                translate: Bool = false, prompt: String? = nil) -> Data {
+    static func multipartBody(boundary: String, wavData: Data, language: String,
+                               translate: Bool = false, prompt: String? = nil) -> Data {
         var body = Data()
         func append(_ string: String) { body.append(Data(string.utf8)) }
         var fields = [("response_format", "json"),

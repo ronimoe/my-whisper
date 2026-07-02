@@ -13,9 +13,7 @@ final class Recorder {
     private var samples: [Float] = []
     private var level: Float = 0
     private let lock = NSLock()
-    private var hasSpeech = false
-    private var silentFrames = 0
-    private var autoStopFired = false
+    private var silenceDetector = SilenceDetector()
     /// Set by the caller before each recording; enables silence auto-stop.
     var autoStopEnabled = false
     var onAutoStop: (() -> Void)?
@@ -47,9 +45,7 @@ final class Recorder {
         lock.lock()
         samples.removeAll()
         level = 0
-        hasSpeech = false
-        silentFrames = 0
-        autoStopFired = false
+        silenceDetector.reset()
         lock.unlock()
 
         let input = engine.inputNode
@@ -109,19 +105,7 @@ final class Recorder {
         lock.lock()
         samples.append(contentsOf: converted)
         level = level * 0.5 + min(1.0, rms * 12) * 0.5
-        var shouldFireAutoStop = false
-        if level >= 0.12 {
-            hasSpeech = true
-            silentFrames = 0
-        } else if hasSpeech && level < 0.06 {
-            silentFrames += Int(output.frameLength)
-            if silentFrames >= 32000 && !autoStopFired {
-                autoStopFired = true
-                shouldFireAutoStop = true
-            }
-        } else if hasSpeech {
-            silentFrames = 0
-        }
+        let shouldFireAutoStop = silenceDetector.process(level: level, frameCount: Int(output.frameLength))
         lock.unlock()
 
         if shouldFireAutoStop && autoStopEnabled {

@@ -26,7 +26,11 @@ struct Lexicon {
     }
 
     static func load() -> Lexicon {
-        guard let data = try? Data(contentsOf: fileURL),
+        load(from: fileURL)
+    }
+
+    static func load(from url: URL) -> Lexicon {
+        guard let data = try? Data(contentsOf: url),
               let file = try? JSONDecoder().decode(File.self, from: data) else {
             return Lexicon(vocabulary: [], replacements: [])
         }

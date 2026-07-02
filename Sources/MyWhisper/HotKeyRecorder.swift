@@ -70,7 +70,8 @@ final class HotKeyRecorder: NSObject, NSWindowDelegate {
             return
         }
 
-        let display = Self.displayString(carbonModifiers: carbon, event: event)
+        let display = Self.displayString(carbonModifiers: carbon, keyCode: event.keyCode,
+                                         fallbackCharacters: event.charactersIgnoringModifiers)
         onCapture?(UInt32(event.keyCode), carbon, display)
         window?.close()
     }
@@ -94,15 +95,15 @@ final class HotKeyRecorder: NSObject, NSWindowDelegate {
         116: "PgUp", 121: "PgDn",
     ]
 
-    static func displayString(carbonModifiers: UInt32, event: NSEvent) -> String {
+    static func displayString(carbonModifiers: UInt32, keyCode: UInt16, fallbackCharacters: String?) -> String {
         var parts = ""
         if carbonModifiers & UInt32(controlKey) != 0 { parts += "⌃" }
         if carbonModifiers & UInt32(optionKey) != 0 { parts += "⌥" }
         if carbonModifiers & UInt32(shiftKey) != 0 { parts += "⇧" }
         if carbonModifiers & UInt32(cmdKey) != 0 { parts += "⌘" }
-        let key = functionKeyNames[event.keyCode]
-            ?? specialKeyNames[event.keyCode]
-            ?? (event.charactersIgnoringModifiers ?? "?").uppercased()
+        let key = functionKeyNames[keyCode]
+            ?? specialKeyNames[keyCode]
+            ?? (fallbackCharacters ?? "?").uppercased()
         return parts + key
     }
 }

@@ -7,6 +7,7 @@ frontmost app. Swift Package Manager, AppKit, no Xcode project.
 ## Commands
 
 - `swift build -c release` — build the executable
+- `make test` — run the XCTest suite (needs `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`; bare CLT lacks XCTest). Gate every change on this.
 - `make app` — assemble `build/MyWhisper.app` (ad-hoc signed)
 - `make run` — build + launch
 - `make model MODEL=large-v3-turbo` — download a ggml model
