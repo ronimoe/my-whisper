@@ -8,7 +8,7 @@ final class HeadlessRunner {
         var value: Result<String, Error>?
     }
 
-    func run(wavPath: String, language: String) -> Int32 {
+    func run(wavPath: String, language: String, translate: Bool = false) -> Int32 {
         let errOut = FileHandle.standardError
         func fail(_ message: String) -> Int32 {
             errOut.write(Data("error: \(message)\n".utf8))
@@ -48,10 +48,15 @@ final class HeadlessRunner {
             return fail("could not read \(wavPath)")
         }
 
+        let lexicon = Lexicon.load()
         let box = ResultBox()
         let done = DispatchSemaphore(value: 0)
         Task.detached {
-            do { box.value = .success(try await server.transcribe(wavData: wav, language: language)) }
+            do {
+                box.value = .success(try await server.transcribe(wavData: wav, language: language,
+                                                                  translate: translate,
+                                                                  prompt: lexicon.vocabularyPrompt))
+            }
             catch { box.value = .failure(error) }
             done.signal()
         }
@@ -59,7 +64,7 @@ final class HeadlessRunner {
 
         switch box.value {
         case .success(let text):
-            print(Postprocess.clean(text))
+            print(lexicon.apply(to: Postprocess.clean(text)))
             return 0
         case .failure(let error):
             return fail(error.localizedDescription)

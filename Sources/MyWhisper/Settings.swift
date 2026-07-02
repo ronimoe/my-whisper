@@ -67,6 +67,12 @@ final class Settings {
         set { defaults.set(newValue, forKey: "autoStopEnabled") }
     }
 
+    /// Translate non-English speech to English instead of transcribing verbatim. Default off.
+    var translateToEnglish: Bool {
+        get { defaults.object(forKey: "translateToEnglish") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "translateToEnglish") }
+    }
+
     func availableModels() -> [URL] {
         let files = (try? FileManager.default.contentsOfDirectory(
             at: Self.modelsDir, includingPropertiesForKeys: nil)) ?? []

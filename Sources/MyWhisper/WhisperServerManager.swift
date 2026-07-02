@@ -130,7 +130,8 @@ final class WhisperServerManager {
         var errorDescription: String? { message }
     }
 
-    func transcribe(wavData: Data, language: String) async throws -> String {
+    func transcribe(wavData: Data, language: String, translate: Bool = false,
+                     prompt: String? = nil) async throws -> String {
         guard let url = URL(string: "http://127.0.0.1:\(port)/inference") else {
             throw TranscriptionError(message: "Bad server URL")
         }
@@ -140,7 +141,8 @@ final class WhisperServerManager {
         let boundary = "mywhisper-\(UUID().uuidString)"
         request.setValue("multipart/form-data; boundary=\(boundary)",
                          forHTTPHeaderField: "Content-Type")
-        request.httpBody = multipartBody(boundary: boundary, wavData: wavData, language: language)
+        request.httpBody = multipartBody(boundary: boundary, wavData: wavData, language: language,
+                                         translate: translate, prompt: prompt)
 
         let (data, response) = try await URLSession.shared.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -157,12 +159,16 @@ final class WhisperServerManager {
         return decoded?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    private func multipartBody(boundary: String, wavData: Data, language: String) -> Data {
+    private func multipartBody(boundary: String, wavData: Data, language: String,
+                                translate: Bool = false, prompt: String? = nil) -> Data {
         var body = Data()
         func append(_ string: String) { body.append(Data(string.utf8)) }
-        for (name, value) in [("response_format", "json"),
-                              ("language", language),
-                              ("temperature", "0.0")] {
+        var fields = [("response_format", "json"),
+                      ("language", language),
+                      ("temperature", "0.0")]
+        if translate { fields.append(("translate", "true")) }
+        if let prompt, !prompt.isEmpty { fields.append(("prompt", prompt)) }
+        for (name, value) in fields {
             append("--\(boundary)\r\n")
             append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
             append("\(value)\r\n")

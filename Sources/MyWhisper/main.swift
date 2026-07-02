@@ -10,6 +10,7 @@ if arguments.contains("--help") || arguments.contains("-h") {
       MyWhisper                        Run the menu bar app
       MyWhisper --transcribe <wav>     Transcribe a 16 kHz mono WAV file and print the text
           [--language <code|auto>]     Language override (default: saved setting)
+          [--translate]                Translate the speech to English
 
     The menu bar app toggles recording with the global hotkey (default ⌥Space),
     transcribes locally with whisper.cpp, and pastes the result into the
@@ -28,7 +29,8 @@ if let index = arguments.firstIndex(of: "--transcribe") {
     if let langIndex = arguments.firstIndex(of: "--language"), arguments.count > langIndex + 1 {
         language = arguments[langIndex + 1]
     }
-    exit(HeadlessRunner().run(wavPath: wavPath, language: language))
+    let translate = arguments.contains("--translate") || Settings.shared.translateToEnglish
+    exit(HeadlessRunner().run(wavPath: wavPath, language: language, translate: translate))
 }
 
 let app = NSApplication.shared

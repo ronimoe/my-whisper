@@ -152,11 +152,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusController.setStatus(.transcribing)
         let wav = WavWriter.data(fromSamples: samples)
         let language = Settings.shared.language
+        let translate = Settings.shared.translateToEnglish
+        let lexicon = Lexicon.load()
 
         Task {
             do {
-                let raw = try await server.transcribe(wavData: wav, language: language)
-                let text = Postprocess.clean(raw)
+                let raw = try await server.transcribe(wavData: wav, language: language,
+                                                       translate: translate,
+                                                       prompt: lexicon.vocabularyPrompt)
+                let text = lexicon.apply(to: Postprocess.clean(raw))
                 await MainActor.run {
                     self.statusController.setStatus(.idle)
                     guard !text.isEmpty else { return }

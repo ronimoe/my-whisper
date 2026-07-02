@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 final class StatusItemController: NSObject, NSMenuDelegate {
     enum DictationStatus {
@@ -125,6 +126,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         hotkeyItem.target = self
         menu.addItem(hotkeyItem)
 
+        let replacementsItem = NSMenuItem(title: "Edit Text Replacements…",
+                                          action: #selector(editTextReplacements), keyEquivalent: "")
+        replacementsItem.target = self
+        menu.addItem(replacementsItem)
+
         let soundItem = NSMenuItem(title: "Sound Cues", action: #selector(toggleSoundCues), keyEquivalent: "")
         soundItem.target = self
         soundItem.state = Settings.shared.soundCues ? .on : .off
@@ -134,6 +140,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         autoStopItem.target = self
         autoStopItem.state = Settings.shared.autoStopEnabled ? .on : .off
         menu.addItem(autoStopItem)
+
+        let translateItem = NSMenuItem(title: "Translate to English", action: #selector(toggleTranslate), keyEquivalent: "")
+        translateItem.target = self
+        translateItem.state = Settings.shared.translateToEnglish ? .on : .off
+        menu.addItem(translateItem)
+
+        let launchAtLoginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        launchAtLoginItem.target = self
+        launchAtLoginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        launchAtLoginItem.isEnabled = Bundle.main.bundleURL.pathExtension == "app"
+        menu.addItem(launchAtLoginItem)
 
         menu.addItem(.separator())
         let logItem = NSMenuItem(title: "Open Server Log", action: #selector(openLog), keyEquivalent: "")
@@ -205,6 +222,27 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func toggleAutoStop() {
         Settings.shared.autoStopEnabled.toggle()
+    }
+
+    @objc private func toggleTranslate() {
+        Settings.shared.translateToEnglish.toggle()
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        if SMAppService.mainApp.status == .enabled {
+            try? SMAppService.mainApp.unregister()
+        } else {
+            do {
+                try SMAppService.mainApp.register()
+            } catch {
+                Notifier.show(title: "Couldn't enable Launch at Login", body: error.localizedDescription)
+            }
+        }
+    }
+
+    @objc private func editTextReplacements() {
+        Lexicon.ensureFileExists()
+        NSWorkspace.shared.open(Lexicon.fileURL)
     }
 
     @objc private func openModelsFolder() {
