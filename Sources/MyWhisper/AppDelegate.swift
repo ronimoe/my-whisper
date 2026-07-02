@@ -164,6 +164,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                        translate: translate,
                                                        prompt: params.prompt)
                 let candidate = lexicon.apply(to: Postprocess.clean(raw))
+
+                if Settings.shared.voiceCommandsEnabled, !candidate.isEmpty,
+                   let command = VoiceCommands.match(candidate) {
+                    await MainActor.run {
+                        self.statusController.setStatus(.idle)
+                        if !TextInserter.perform(command) {
+                            Notifier.show(title: "Command needs Accessibility",
+                                         body: "Grant Accessibility permission to run voice commands.")
+                        }
+                    }
+                    return
+                }
+
                 let modeName = Settings.shared.currentModeName
                 let text: String
                 if modeName != "Raw", let mode = ModeStore.load().first(where: { $0.name == modeName }) {

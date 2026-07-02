@@ -33,12 +33,33 @@ enum TextInserter {
         AXIsProcessTrustedWithOptions(options)
     }
 
+    /// Executes a recognized voice command in the frontmost app via synthetic
+    /// key events. Returns false when Accessibility isn't granted.
+    @discardableResult
+    static func perform(_ command: VoiceCommand) -> Bool {
+        guard AXIsProcessTrusted() else { return false }
+        switch command {
+        case .undoLastDictation:
+            sendKey(6, flags: .maskCommand) // kVK_ANSI_Z
+        case .newLine:
+            sendKey(36, flags: []) // kVK_Return
+        case .newParagraph:
+            sendKey(36, flags: [])
+            sendKey(36, flags: [])
+        }
+        return true
+    }
+
     private static func sendCmdV() {
+        sendKey(9, flags: .maskCommand) // kVK_ANSI_V
+    }
+
+    private static func sendKey(_ keyCode: CGKeyCode, flags: CGEventFlags) {
         let source = CGEventSource(stateID: .combinedSessionState)
-        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true) // kVK_ANSI_V
-        keyDown?.flags = .maskCommand
-        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false)
-        keyUp?.flags = .maskCommand
+        let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true)
+        keyDown?.flags = flags
+        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
+        keyUp?.flags = flags
         keyDown?.post(tap: .cghidEventTap)
         keyUp?.post(tap: .cghidEventTap)
     }

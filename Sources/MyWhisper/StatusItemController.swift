@@ -150,6 +150,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         autoStopItem.state = Settings.shared.autoStopEnabled ? .on : .off
         menu.addItem(autoStopItem)
 
+        let voiceCommandsItem = NSMenuItem(title: "Voice Commands", action: #selector(toggleVoiceCommands), keyEquivalent: "")
+        voiceCommandsItem.target = self
+        voiceCommandsItem.state = Settings.shared.voiceCommandsEnabled ? .on : .off
+        menu.addItem(voiceCommandsItem)
+
         let translateItem = NSMenuItem(title: "Translate to English", action: #selector(toggleTranslate), keyEquivalent: "")
         translateItem.target = self
         translateItem.state = Settings.shared.translateToEnglish ? .on : .off
@@ -263,6 +268,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func toggleTranslate() {
         Settings.shared.translateToEnglish.toggle()
+    }
+
+    @objc private func toggleVoiceCommands() {
+        Settings.shared.voiceCommandsEnabled.toggle()
     }
 
     @objc private func toggleLaunchAtLogin() {

@@ -80,6 +80,13 @@ final class Settings {
         set { defaults.set(newValue, forKey: "translateToEnglish") }
     }
 
+    /// Execute recognized spoken commands (e.g. "scratch that") instead of
+    /// pasting them verbatim. Default on.
+    var voiceCommandsEnabled: Bool {
+        get { defaults.object(forKey: "voiceCommandsEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "voiceCommandsEnabled") }
+    }
+
     /// Name of the active AI mode ("Raw" disables post-processing).
     var currentModeName: String {
         get { defaults.string(forKey: "currentModeName") ?? "Raw" }
