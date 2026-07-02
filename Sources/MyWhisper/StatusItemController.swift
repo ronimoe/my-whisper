@@ -181,6 +181,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         logItem.target = self
         menu.addItem(logItem)
 
+        menu.addItem(.separator())
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
         let quit = NSMenuItem(title: "Quit MyWhisper", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
@@ -329,6 +334,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func openLog() {
         NSWorkspace.shared.open(Settings.appSupportDir.appendingPathComponent("whisper-server.log"))
+    }
+
+    @objc private func openSettings() {
+        SettingsWindowController.shared.show()
     }
 
     @objc private func quit() { NSApp.terminate(nil) }

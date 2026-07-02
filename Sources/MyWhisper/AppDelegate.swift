@@ -21,6 +21,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusController.onChangeHotKey = { [weak self] in self?.beginHotKeyCapture() }
         statusController.levelProvider = { [weak self] in self?.recorder.currentLevel ?? 0 }
 
+        SettingsWindowController.shared.onChangeHotKey = { [weak self] in self?.beginHotKeyCapture() }
+        SettingsWindowController.shared.onModelChanged = { [weak self] in self?.restartServer() }
+
         hotKeys.onHotKeyDown = { [weak self] in self?.hotKeyDown() }
         hotKeys.onHotKeyUp = { [weak self] in self?.hotKeyUp() }
         hotKeys.register(keyCode: Settings.shared.hotKeyCode,
@@ -73,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         server.start()
     }
 
-    private func beginHotKeyCapture() {
+    func beginHotKeyCapture() {
         // Release the current hotkey so pressing it can be captured as the
         // new combination instead of toggling dictation.
         hotKeys.suspend()
@@ -90,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recorder.beginCapture()
     }
 
-    private func restartServer() {
+    func restartServer() {
         stopPreviewTimer()
         if recorder.isRecording { _ = recorder.stop() }
         server?.stop()
