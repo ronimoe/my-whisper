@@ -8,7 +8,7 @@ final class HeadlessRunner {
         var value: Result<String, Error>?
     }
 
-    func run(wavPath: String, language: String, translate: Bool = false) -> Int32 {
+    func run(wavPath: String, language: String, translate: Bool = false, modeName: String = "Raw") -> Int32 {
         let errOut = FileHandle.standardError
         func fail(_ message: String) -> Int32 {
             errOut.write(Data("error: \(message)\n".utf8))
@@ -53,9 +53,22 @@ final class HeadlessRunner {
         let done = DispatchSemaphore(value: 0)
         Task.detached {
             do {
-                box.value = .success(try await server.transcribe(wavData: wav, language: language,
-                                                                  translate: translate,
-                                                                  prompt: lexicon.vocabularyPrompt))
+                let raw = try await server.transcribe(wavData: wav, language: language,
+                                                       translate: translate,
+                                                       prompt: lexicon.vocabularyPrompt)
+                let candidate = lexicon.apply(to: Postprocess.clean(raw))
+                var text = candidate
+                if modeName != "Raw", let mode = ModeStore.load().first(where: { $0.name == modeName }) {
+                    do {
+                        text = try await Ollama.rewrite(text: candidate, mode: mode,
+                                                        defaultModel: Settings.shared.ollamaModel,
+                                                        baseURL: URL(string: "http://127.0.0.1:11434")!)
+                    } catch {
+                        errOut.write(Data("note: AI mode failed, printing raw text — \(error.localizedDescription)\n".utf8))
+                        text = candidate
+                    }
+                }
+                box.value = .success(text)
             }
             catch { box.value = .failure(error) }
             done.signal()
@@ -64,7 +77,7 @@ final class HeadlessRunner {
 
         switch box.value {
         case .success(let text):
-            print(lexicon.apply(to: Postprocess.clean(text)))
+            print(text)
             return 0
         case .failure(let error):
             return fail(error.localizedDescription)

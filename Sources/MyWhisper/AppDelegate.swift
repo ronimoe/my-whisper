@@ -160,7 +160,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let raw = try await server.transcribe(wavData: wav, language: language,
                                                        translate: translate,
                                                        prompt: lexicon.vocabularyPrompt)
-                let text = lexicon.apply(to: Postprocess.clean(raw))
+                let candidate = lexicon.apply(to: Postprocess.clean(raw))
+                let modeName = Settings.shared.currentModeName
+                let text: String
+                if modeName != "Raw", let mode = ModeStore.load().first(where: { $0.name == modeName }) {
+                    do {
+                        text = try await Ollama.rewrite(text: candidate, mode: mode,
+                                                        defaultModel: Settings.shared.ollamaModel,
+                                                        baseURL: URL(string: "http://127.0.0.1:11434")!)
+                    } catch {
+                        await MainActor.run {
+                            Notifier.show(title: "AI mode failed — pasted raw text",
+                                         body: error.localizedDescription)
+                        }
+                        text = candidate
+                    }
+                } else {
+                    text = candidate
+                }
                 await MainActor.run {
                     self.statusController.setStatus(.idle)
                     guard !text.isEmpty else { return }

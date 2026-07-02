@@ -120,6 +120,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         modelItem.submenu = buildModelMenu()
         menu.addItem(modelItem)
 
+        let modeItem = NSMenuItem(title: "Mode", action: nil, keyEquivalent: "")
+        modeItem.submenu = buildModeMenu()
+        menu.addItem(modeItem)
+
         menu.addItem(.separator())
         let hotkeyItem = NSMenuItem(title: "Change Hotkey… (now \(hotkey))",
                                     action: #selector(changeHotKey), keyEquivalent: "")
@@ -209,6 +213,34 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func toggleDictation() { onToggleDictation?() }
 
+    private func buildModeMenu() -> NSMenu {
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        let modes = ModeStore.load()
+        let current = Settings.shared.currentModeName
+        let currentExists = current == "Raw" || modes.contains { $0.name == current }
+
+        let raw = NSMenuItem(title: "Raw", action: #selector(selectMode(_:)), keyEquivalent: "")
+        raw.target = self
+        raw.representedObject = "Raw"
+        raw.state = (current == "Raw" || !currentExists) ? .on : .off
+        submenu.addItem(raw)
+
+        for mode in modes {
+            let entry = NSMenuItem(title: mode.name, action: #selector(selectMode(_:)), keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = mode.name
+            entry.state = (mode.name == current) ? .on : .off
+            submenu.addItem(entry)
+        }
+
+        submenu.addItem(.separator())
+        let editModes = NSMenuItem(title: "Edit Modes…", action: #selector(editModes), keyEquivalent: "")
+        editModes.target = self
+        submenu.addItem(editModes)
+        return submenu
+    }
+
     @objc private func selectLanguage(_ sender: NSMenuItem) {
         guard let code = sender.representedObject as? String else { return }
         onSelectLanguage?(code)
@@ -252,6 +284,16 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc private func editTextReplacements() {
         Lexicon.ensureFileExists()
         NSWorkspace.shared.open(Lexicon.fileURL)
+    }
+
+    @objc private func selectMode(_ sender: NSMenuItem) {
+        guard let name = sender.representedObject as? String else { return }
+        Settings.shared.currentModeName = name
+    }
+
+    @objc private func editModes() {
+        ModeStore.ensureFileExists()
+        NSWorkspace.shared.open(ModeStore.fileURL)
     }
 
     @objc private func openModelsFolder() {

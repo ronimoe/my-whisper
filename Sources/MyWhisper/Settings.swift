@@ -73,6 +73,18 @@ final class Settings {
         set { defaults.set(newValue, forKey: "translateToEnglish") }
     }
 
+    /// Name of the active AI mode ("Raw" disables post-processing).
+    var currentModeName: String {
+        get { defaults.string(forKey: "currentModeName") ?? "Raw" }
+        set { defaults.set(newValue, forKey: "currentModeName") }
+    }
+
+    /// Ollama model used when a mode doesn't specify its own.
+    var ollamaModel: String {
+        get { defaults.string(forKey: "ollamaModel") ?? "llama3.2" }
+        set { defaults.set(newValue, forKey: "ollamaModel") }
+    }
+
     func availableModels() -> [URL] {
         let files = (try? FileManager.default.contentsOfDirectory(
             at: Self.modelsDir, includingPropertiesForKeys: nil)) ?? []
