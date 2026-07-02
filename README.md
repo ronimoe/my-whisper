@@ -44,9 +44,19 @@ Accessibility (remove and re-add the app in System Settings).
 - **Tap ⌥Space** — start recording (waveform turns red and dances with your
   voice); tap again to stop, transcribe, and paste.
 - **Hold ⌥Space** — record only while held; release to transcribe (hold-to-talk).
-- Everything else lives in the menu bar menu:
-  - **Language** — fixed language or *Auto-detect* (default; reliable with
-    the large models).
+- **Live preview** — a floating HUD shows the words while you're still
+  speaking (toggle: *Live Preview*).
+- **Voice commands** — when an utterance is exactly a command, it acts
+  instead of typing: "scratch that" / "batalkan" → undo (⌘Z), "new line" /
+  "baris baru", "new paragraph" / "paragraf baru".
+- **Spoken punctuation** (opt-in) — inline "koma" → `,` · "titik" → `.` ·
+  "tanda tanya" → `?` and English equivalents (comma, period, question
+  mark…), with automatic capitalization after sentence enders.
+- Everything else lives in **Settings… (⌘,)** or the menu bar menu:
+  - **Language** — fixed language, *Auto-detect* (default), or
+    **Mixed (Indonesian + English)** for code-switched speech — combine
+    with `vocabulary` entries for your jargon and names; Indonesian also
+    gets automatic punctuation priming.
   - **Model** — switch between downloaded models (server restarts).
   - **Mode** — post-process dictation with a local LLM via Ollama
     (Email / Message / Bullet Notes / your own); see *AI modes* below.
@@ -180,10 +190,10 @@ test-first.
 - [x] Custom vocabulary / text replacements
 - [x] Translate-to-English toggle
 - [x] Launch at login
-- [ ] Context awareness (use selected text / active app)
-- [ ] Settings window (hotkey recorder, language, model manager with
-      in-app downloads)
-- [ ] Streaming preview (see words while you speak)
+- [x] Settings window (⌘,)
+- [x] Streaming preview (see words while you speak)
+- [x] Voice commands, spoken punctuation, mixed-language (code-switching) mode
+- [x] Context awareness ({app}/{selection} placeholders in AI-mode prompts)
 - [ ] In-process engine (link libwhisper directly, drop the server process)
 - [ ] Signed/notarized distribution build
 - [ ] Windows/Linux port (the engine is portable; the capture/paste layer

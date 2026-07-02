@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var previewTimer: Timer?
     private var previewScheduler = PartialScheduler()
     private var previewInFlight = false
+    private var dictationContext = ModeContext.Captured(appName: nil, selection: nil)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusController.onToggleDictation = { [weak self] in self?.toggleDictation() }
@@ -138,6 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         _ = server
+        dictationContext = ModeContext.capture()
         do {
             recorder.autoStopEnabled = Settings.shared.autoStopEnabled
             try recorder.start()
@@ -244,7 +246,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let text: String
                 if modeName != "Raw", let mode = ModeStore.load().first(where: { $0.name == modeName }) {
                     do {
-                        text = try await Ollama.rewrite(text: candidate, mode: mode,
+                        let contextualMode = Mode(name: mode.name,
+                                                  prompt: ModeContext.substitute(prompt: mode.prompt,
+                                                                                 appName: dictationContext.appName,
+                                                                                 selection: dictationContext.selection),
+                                                  model: mode.model)
+                        text = try await Ollama.rewrite(text: candidate, mode: contextualMode,
                                                         defaultModel: Settings.shared.ollamaModel,
                                                         baseURL: URL(string: "http://127.0.0.1:11434")!)
                     } catch {

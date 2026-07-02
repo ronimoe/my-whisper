@@ -10,6 +10,10 @@
       (Request/parse layer unit-tested; unreachable-fallback verified live.)
 - [ ] Manual feel checks: hold-to-talk threshold (0.35 s), auto-stop
       silence window (2 s), history window UI, Launch at Login toggle.
+- [ ] Manual checks (v1.5+): Settings window (⌘,) controls, live preview
+      HUD position/readability, spoken punctuation in real dictation
+      (enable in Settings first), mixed-language mode with your real voice,
+      {app}/{selection} placeholders in AI modes (needs Ollama chat model).
 
 ## Future release (v2 candidates)
 
