@@ -94,6 +94,13 @@ final class Settings {
         set { defaults.set(newValue, forKey: "livePreview") }
     }
 
+    /// Replace spoken punctuation words (e.g. "comma", "titik") with their
+    /// symbol equivalents (see SpokenPunctuation). Default off.
+    var spokenPunctuationEnabled: Bool {
+        get { defaults.object(forKey: "spokenPunctuationEnabled") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "spokenPunctuationEnabled") }
+    }
+
     /// Name of the active AI mode ("Raw" disables post-processing).
     var currentModeName: String {
         get { defaults.string(forKey: "currentModeName") ?? "Raw" }

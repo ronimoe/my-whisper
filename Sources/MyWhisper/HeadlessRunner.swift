@@ -59,7 +59,10 @@ final class HeadlessRunner {
                 let raw = try await server.transcribe(wavData: wav, language: params.language,
                                                        translate: translate,
                                                        prompt: params.prompt)
-                let candidate = lexicon.apply(to: Postprocess.clean(raw))
+                var candidate = lexicon.apply(to: Postprocess.clean(raw))
+                if Settings.shared.spokenPunctuationEnabled {
+                    candidate = SpokenPunctuation.apply(to: candidate)
+                }
                 var text = candidate
                 if modeName != "Raw", let mode = ModeStore.load().first(where: { $0.name == modeName }) {
                     do {

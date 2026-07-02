@@ -155,6 +155,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         voiceCommandsItem.state = Settings.shared.voiceCommandsEnabled ? .on : .off
         menu.addItem(voiceCommandsItem)
 
+        let spokenPunctuationItem = NSMenuItem(title: "Spoken Punctuation", action: #selector(toggleSpokenPunctuation), keyEquivalent: "")
+        spokenPunctuationItem.target = self
+        spokenPunctuationItem.state = Settings.shared.spokenPunctuationEnabled ? .on : .off
+        menu.addItem(spokenPunctuationItem)
+
         let livePreviewItem = NSMenuItem(title: "Live Preview", action: #selector(toggleLivePreview), keyEquivalent: "")
         livePreviewItem.target = self
         livePreviewItem.state = Settings.shared.livePreviewEnabled ? .on : .off
@@ -277,6 +282,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func toggleVoiceCommands() {
         Settings.shared.voiceCommandsEnabled.toggle()
+    }
+
+    @objc private func toggleSpokenPunctuation() {
+        Settings.shared.spokenPunctuationEnabled.toggle()
     }
 
     @objc private func toggleLivePreview() {

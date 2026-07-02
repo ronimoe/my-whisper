@@ -219,7 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let raw = try await server.transcribe(wavData: wav, language: params.language,
                                                        translate: translate,
                                                        prompt: params.prompt)
-                let candidate = lexicon.apply(to: Postprocess.clean(raw))
+                var candidate = lexicon.apply(to: Postprocess.clean(raw))
 
                 if Settings.shared.voiceCommandsEnabled, !candidate.isEmpty,
                    let command = VoiceCommands.match(candidate) {
@@ -231,6 +231,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         }
                     }
                     return
+                }
+
+                if Settings.shared.spokenPunctuationEnabled {
+                    candidate = SpokenPunctuation.apply(to: candidate)
                 }
 
                 let modeName = Settings.shared.currentModeName
