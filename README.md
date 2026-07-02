@@ -155,6 +155,14 @@ scripts/                    model download, .app assembly
 vendor/whisper.cpp          optional vendored engine (make deps)
 ```
 
+## Privacy
+
+Everything runs on-device: speech → whisper.cpp on `127.0.0.1`, optional AI
+modes → Ollama on `127.0.0.1`. No telemetry, no accounts, no outbound
+connections — enforced by a unit test (`NetworkAuditTests`) that fails if a
+non-localhost URL ever enters app code. Details in [PRIVACY.md](PRIVACY.md).
+MIT licensed.
+
 ## Testing
 
 `make test` runs the XCTest suite (57 tests: text cleanup, WAV encoding,
