@@ -1,0 +1,177 @@
+import Foundation
+
+/// Owns a local whisper-server process (whisper.cpp) and talks to it over
+/// localhost HTTP. The model stays loaded in memory between dictations.
+final class WhisperServerManager {
+    enum State {
+        case stopped
+        case starting
+        case ready
+        case failed(String)
+    }
+
+    private(set) var state: State = .stopped {
+        didSet { onStateChange?(state) }
+    }
+    var onStateChange: ((State) -> Void)?
+
+    let modelURL: URL
+    private let serverBinary: URL
+    private let port: Int
+    private var process: Process?
+    private let logURL = Settings.appSupportDir.appendingPathComponent("whisper-server.log")
+
+    init(serverBinary: URL, modelURL: URL, port: Int) {
+        self.serverBinary = serverBinary
+        self.modelURL = modelURL
+        self.port = port
+    }
+
+    static func locateServerBinary() -> URL? {
+        let fm = FileManager.default
+        var candidates: [URL] = []
+        if let override = ProcessInfo.processInfo.environment["MYWHISPER_SERVER"] {
+            candidates.append(URL(fileURLWithPath: override))
+        }
+        if let resources = Bundle.main.resourceURL {
+            candidates.append(resources.appendingPathComponent("bin/whisper-server"))
+        }
+        if let executable = Bundle.main.executableURL?.resolvingSymlinksInPath() {
+            // repo layout: .build/<config>/MyWhisper → vendor/whisper.cpp/build/bin
+            candidates.append(executable.deletingLastPathComponent()
+                .appendingPathComponent("../../vendor/whisper.cpp/build/bin/whisper-server")
+                .standardized)
+        }
+        candidates.append(URL(fileURLWithPath: fm.currentDirectoryPath)
+            .appendingPathComponent("vendor/whisper.cpp/build/bin/whisper-server"))
+        candidates.append(URL(fileURLWithPath: "/opt/homebrew/bin/whisper-server"))
+        candidates.append(URL(fileURLWithPath: "/usr/local/bin/whisper-server"))
+        return candidates.first { fm.isExecutableFile(atPath: $0.path) }
+    }
+
+    func start() {
+        guard process == nil else { return }
+        state = .starting
+
+        let proc = Process()
+        proc.executableURL = serverBinary
+        proc.arguments = [
+            "--model", modelURL.path,
+            "--host", "127.0.0.1",
+            "--port", String(port),
+            "--threads", String(max(4, ProcessInfo.processInfo.activeProcessorCount - 2)),
+        ]
+        FileManager.default.createFile(atPath: logURL.path, contents: nil)
+        if let log = try? FileHandle(forWritingTo: logURL) {
+            proc.standardOutput = log
+            proc.standardError = log
+        }
+        proc.terminationHandler = { [weak self] finished in
+            guard let self else { return }
+            if case .stopped = self.state { return }
+            self.state = .failed(
+                "whisper-server exited (code \(finished.terminationStatus)). \(self.logTail())")
+        }
+        do {
+            try proc.run()
+        } catch {
+            state = .failed("Could not launch whisper-server: \(error.localizedDescription)")
+            return
+        }
+        process = proc
+        pollUntilReady()
+    }
+
+    func stop() {
+        state = .stopped
+        process?.terminate()
+        process = nil
+    }
+
+    private func pollUntilReady() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let deadline = Date().addingTimeInterval(300)
+            while Date() < deadline {
+                guard let self else { return }
+                guard case .starting = self.state else { return }
+                if self.ping() {
+                    self.state = .ready
+                    return
+                }
+                Thread.sleep(forTimeInterval: 0.5)
+            }
+            if let self, case .starting = self.state {
+                self.state = .failed("Timed out waiting for whisper-server to load the model")
+            }
+        }
+    }
+
+    private func ping() -> Bool {
+        guard let url = URL(string: "http://127.0.0.1:\(port)/") else { return false }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 1.5
+        var reachable = false
+        let semaphore = DispatchSemaphore(value: 0)
+        URLSession.shared.dataTask(with: request) { _, response, _ in
+            reachable = response is HTTPURLResponse
+            semaphore.signal()
+        }.resume()
+        semaphore.wait()
+        return reachable
+    }
+
+    private func logTail(lines: Int = 5) -> String {
+        guard let content = try? String(contentsOf: logURL, encoding: .utf8) else { return "" }
+        return content.split(separator: "\n").suffix(lines).joined(separator: "\n")
+    }
+
+    struct TranscriptionError: LocalizedError {
+        let message: String
+        var errorDescription: String? { message }
+    }
+
+    func transcribe(wavData: Data, language: String) async throws -> String {
+        guard let url = URL(string: "http://127.0.0.1:\(port)/inference") else {
+            throw TranscriptionError(message: "Bad server URL")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 600
+        let boundary = "mywhisper-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)",
+                         forHTTPHeaderField: "Content-Type")
+        request.httpBody = multipartBody(boundary: boundary, wavData: wavData, language: language)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+
+        struct ServerResponse: Decodable {
+            let text: String?
+            let error: String?
+        }
+        let decoded = try? JSONDecoder().decode(ServerResponse.self, from: data)
+        if statusCode != 200 || decoded?.error != nil {
+            let detail = decoded?.error ?? String(data: data, encoding: .utf8) ?? ""
+            throw TranscriptionError(message: "Transcription failed (HTTP \(statusCode)): \(detail)")
+        }
+        return decoded?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private func multipartBody(boundary: String, wavData: Data, language: String) -> Data {
+        var body = Data()
+        func append(_ string: String) { body.append(Data(string.utf8)) }
+        for (name, value) in [("response_format", "json"),
+                              ("language", language),
+                              ("temperature", "0.0")] {
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+            append("\(value)\r\n")
+        }
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n")
+        append("Content-Type: audio/wav\r\n\r\n")
+        body.append(wavData)
+        append("\r\n--\(boundary)--\r\n")
+        return body
+    }
+}
