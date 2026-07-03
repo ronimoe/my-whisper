@@ -59,14 +59,22 @@ final class HeadlessRunner {
             (engine as? WhisperEngine)?.waitForPendingWork()
         }
 
-        guard let wav = FileManager.default.contents(atPath: wavPath) else {
-            return fail("could not read \(wavPath)")
-        }
         let samples: [Float]
         do {
+            // Fast path: exact 16 kHz mono WAV via WavReader. On ANY failure
+            // (missing file, wrong format, non-WAV container) fall back to
+            // AudioFileDecoder, which handles arbitrary AVAudioFile-readable
+            // formats (mp3, m4a, aiff, …) via resampling.
+            guard let wav = FileManager.default.contents(atPath: wavPath) else {
+                throw WavReader.DecodeError(message: "could not read \(wavPath)")
+            }
             samples = try WavReader.samples(fromWavData: wav)
         } catch {
-            return fail(error.localizedDescription)
+            do {
+                samples = try AudioFileDecoder.samples(fromFileAt: URL(fileURLWithPath: wavPath))
+            } catch {
+                return fail(error.localizedDescription)
+            }
         }
 
         let lexicon = Lexicon.load()

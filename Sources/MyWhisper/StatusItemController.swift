@@ -17,6 +17,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     var onSelectEngine: ((String) -> Void)?
     var onChangeHotKey: (() -> Void)?
     var onOpenOnboarding: (() -> Void)?
+    var onTranscribeFile: (() -> Void)?
     /// Supplies the live mic level (0…1) for the recording animation.
     var levelProvider: (() -> Float)?
 
@@ -148,6 +149,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                                      action: #selector(openHistory), keyEquivalent: "")
         historyItem.target = self
         menu.addItem(historyItem)
+
+        let transcribeFileItem = NSMenuItem(title: "Transcribe Audio File…",
+                                            action: #selector(transcribeFile), keyEquivalent: "")
+        transcribeFileItem.target = self
+        menu.addItem(transcribeFileItem)
 
         let replacementsItem = NSMenuItem(title: "Edit Text Replacements…",
                                           action: #selector(editTextReplacements), keyEquivalent: "")
@@ -366,6 +372,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func openHistory() {
         HistoryWindowController.shared.show()
+    }
+
+    @objc private func transcribeFile() {
+        onTranscribeFile?()
     }
 
     @objc private func editTextReplacements() {

@@ -8,7 +8,7 @@ if arguments.contains("--help") || arguments.contains("-h") {
 
     Usage:
       MyWhisper                        Run the menu bar app
-      MyWhisper --transcribe <wav>     Transcribe a 16 kHz mono WAV file and print the text
+      MyWhisper --transcribe <audio>   Transcribe an audio file (wav/mp3/m4a/…) and print the text
           [--language <code|auto>]     Language override (default: saved setting)
           [--translate]                Translate the speech to English
           [--mode <name>]              Rewrite the result with an AI mode (default: saved setting)

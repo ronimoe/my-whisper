@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let statusController = StatusItemController()
@@ -45,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         statusController.onChangeHotKey = { [weak self] in self?.beginHotKeyCapture() }
         statusController.levelProvider = { [weak self] in self?.recorder.currentLevel ?? 0 }
+        statusController.onTranscribeFile = { [weak self] in self?.beginTranscribeFile() }
 
         SettingsWindowController.shared.onChangeHotKey = { [weak self] in self?.beginHotKeyCapture() }
         SettingsWindowController.shared.onModelChanged = { [weak self] in self?.restartServer() }
@@ -393,6 +395,74 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
                         self.statusController.setStatus(.idle)
                     }
+                }
+            }
+        }
+    }
+
+    /// "Transcribe Audio File…": lets the user pick an existing audio file
+    /// and runs it through the same engine used for live dictation, but
+    /// verbatim — no AI mode rewrite, no spoken-punctuation post-processing —
+    /// since a file transcript isn't spoken dictation. Result goes to
+    /// TranscriptWindowController instead of being pasted.
+    private func beginTranscribeFile() {
+        guard !isTranscribing, !recorder.isRecording else {
+            Notifier.show(title: "Still busy", body: "Wait for the current dictation or transcription to finish.")
+            return
+        }
+        guard let engine, case .ready = engine.state else {
+            Notifier.show(title: "Model still loading", body: "Try again in a few seconds.")
+            return
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio]
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.urls.first else { return }
+            self?.transcribeFile(at: url, engine: engine)
+        }
+    }
+
+    private func transcribeFile(at url: URL, engine: any TranscriptionEngine) {
+        let filename = url.lastPathComponent
+        TranscriptWindowController.shared.setBusy(filename: filename)
+        isTranscribing = true
+
+        let language = Settings.shared.language
+        let translate = Settings.shared.translateToEnglish
+        let lexicon = Lexicon.load()
+        let pipeline = DictationPipeline(engine: engine)
+
+        Task {
+            do {
+                let samples = try await Task.detached(priority: .userInitiated) {
+                    try AudioFileDecoder.samples(fromFileAt: url)
+                }.value
+
+                let params = CodeSwitch.requestParameters(language: language,
+                                                          primary: Settings.shared.mixedPrimary,
+                                                          vocabularyPrompt: lexicon.vocabularyPrompt)
+                let raw = try await pipeline.engine.transcribe(samples: samples, language: params.language,
+                                                                translate: translate, prompt: params.prompt)
+                // Verbatim: Postprocess + lexicon only — no voice commands,
+                // no spoken punctuation, no AI mode rewrite.
+                let cleaned = lexicon.apply(to: Postprocess.clean(raw))
+
+                await MainActor.run {
+                    self.isTranscribing = false
+                    TranscriptWindowController.shared.setTranscript(cleaned, for: filename)
+                    if Settings.shared.historyEnabled {
+                        HistoryStore.shared.append(text: cleaned, language: params.language)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.isTranscribing = false
+                    TranscriptWindowController.shared.setError(error.localizedDescription)
                 }
             }
         }
