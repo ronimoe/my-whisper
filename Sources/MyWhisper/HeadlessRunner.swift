@@ -70,32 +70,30 @@ final class HeadlessRunner {
         }
 
         let lexicon = Lexicon.load()
-        let params = CodeSwitch.requestParameters(language: language,
-                                                   primary: Settings.shared.mixedPrimary,
-                                                   vocabularyPrompt: lexicon.vocabularyPrompt)
+        let pipeline = DictationPipeline(engine: engine)
         let box = ResultBox()
         let done = DispatchSemaphore(value: 0)
         Task.detached {
             do {
-                let raw = try await engine.transcribe(samples: samples, language: params.language,
-                                                      translate: translate,
-                                                      prompt: params.prompt)
-                var candidate = lexicon.apply(to: Postprocess.clean(raw))
-                if Settings.shared.spokenPunctuationEnabled {
-                    candidate = SpokenPunctuation.apply(to: candidate)
+                // The CLI prints text rather than executing key commands, so
+                // voice-command interception is disabled: a transcript that is
+                // itself a command word prints literally, matching prior behavior.
+                let result = try await pipeline.run(
+                    samples: samples, language: language,
+                    mixedPrimary: Settings.shared.mixedPrimary, translate: translate,
+                    lexicon: lexicon, voiceCommandsEnabled: false,
+                    spokenPunctuationEnabled: Settings.shared.spokenPunctuationEnabled,
+                    modeName: modeName, modes: ModeStore.load(), context: nil,
+                    ollamaModel: Settings.shared.ollamaModel,
+                    ollamaBaseURL: Settings.shared.ollamaBaseURL)
+                if let aiFailure = result.aiFailure {
+                    errOut.write(Data("note: AI mode failed, printing raw text — \(aiFailure.localizedDescription)\n".utf8))
                 }
-                var text = candidate
-                if modeName != "Raw", let mode = ModeStore.load().first(where: { $0.name == modeName }) {
-                    do {
-                        text = try await Ollama.rewrite(text: candidate, mode: mode,
-                                                        defaultModel: Settings.shared.ollamaModel,
-                                                        baseURL: Settings.shared.ollamaBaseURL)
-                    } catch {
-                        errOut.write(Data("note: AI mode failed, printing raw text — \(error.localizedDescription)\n".utf8))
-                        text = candidate
-                    }
+                switch result.outcome {
+                case .text(let text): box.value = .success(text)
+                case .empty: box.value = .success("")
+                case .command: box.value = .success("")
                 }
-                box.value = .success(text)
             }
             catch { box.value = .failure(error) }
             done.signal()

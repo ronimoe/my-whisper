@@ -237,19 +237,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let language = Settings.shared.language
         let translate = Settings.shared.translateToEnglish
         let lexicon = Lexicon.load()
-        let params = CodeSwitch.requestParameters(language: language,
-                                                   primary: Settings.shared.mixedPrimary,
-                                                   vocabularyPrompt: lexicon.vocabularyPrompt)
+        let context = dictationContext
+        let pipeline = DictationPipeline(engine: engine)
 
         Task {
             do {
-                let raw = try await engine.transcribe(samples: samples, language: params.language,
-                                                      translate: translate,
-                                                      prompt: params.prompt)
-                var candidate = lexicon.apply(to: Postprocess.clean(raw))
+                let result = try await pipeline.run(
+                    samples: samples, language: language,
+                    mixedPrimary: Settings.shared.mixedPrimary, translate: translate,
+                    lexicon: lexicon,
+                    voiceCommandsEnabled: Settings.shared.voiceCommandsEnabled,
+                    spokenPunctuationEnabled: Settings.shared.spokenPunctuationEnabled,
+                    modeName: Settings.shared.currentModeName, modes: ModeStore.load(),
+                    context: context,
+                    ollamaModel: Settings.shared.ollamaModel,
+                    ollamaBaseURL: Settings.shared.ollamaBaseURL)
 
-                if Settings.shared.voiceCommandsEnabled, !candidate.isEmpty,
-                   let command = VoiceCommands.match(candidate) {
+                if let aiFailure = result.aiFailure {
+                    await MainActor.run {
+                        Notifier.show(title: "AI mode failed — pasted raw text",
+                                     body: aiFailure.localizedDescription)
+                    }
+                }
+
+                switch result.outcome {
+                case .command(let command):
                     await MainActor.run {
                         self.isTranscribing = false
                         self.statusController.setStatus(.idle)
@@ -258,46 +270,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                          body: "Grant Accessibility permission to run voice commands.")
                         }
                     }
-                    return
-                }
-
-                if Settings.shared.spokenPunctuationEnabled {
-                    candidate = SpokenPunctuation.apply(to: candidate)
-                }
-
-                let modeName = Settings.shared.currentModeName
-                let text: String
-                if modeName != "Raw", let mode = ModeStore.load().first(where: { $0.name == modeName }) {
-                    do {
-                        let contextualMode = Mode(name: mode.name,
-                                                  prompt: ModeContext.substitute(prompt: mode.prompt,
-                                                                                 appName: dictationContext.appName,
-                                                                                 selection: dictationContext.selection),
-                                                  model: mode.model)
-                        text = try await Ollama.rewrite(text: candidate, mode: contextualMode,
-                                                        defaultModel: Settings.shared.ollamaModel,
-                                                        baseURL: Settings.shared.ollamaBaseURL)
-                    } catch {
-                        await MainActor.run {
-                            Notifier.show(title: "AI mode failed — pasted raw text",
-                                         body: error.localizedDescription)
+                case .empty:
+                    await MainActor.run {
+                        self.isTranscribing = false
+                        self.statusController.setStatus(.idle)
+                    }
+                case .text(let text):
+                    await MainActor.run {
+                        self.isTranscribing = false
+                        self.statusController.setStatus(.idle)
+                        let pasted = TextInserter.insert(text)
+                        if !pasted {
+                            Notifier.show(title: "Copied to clipboard",
+                                          body: "Grant Accessibility permission to paste automatically.")
                         }
-                        text = candidate
-                    }
-                } else {
-                    text = candidate
-                }
-                await MainActor.run {
-                    self.isTranscribing = false
-                    self.statusController.setStatus(.idle)
-                    guard !text.isEmpty else { return }
-                    let pasted = TextInserter.insert(text)
-                    if !pasted {
-                        Notifier.show(title: "Copied to clipboard",
-                                      body: "Grant Accessibility permission to paste automatically.")
-                    }
-                    if Settings.shared.historyEnabled {
-                        HistoryStore.shared.append(text: text, language: language)
+                        if Settings.shared.historyEnabled {
+                            HistoryStore.shared.append(text: text, language: language)
+                        }
                     }
                 }
             } catch {
