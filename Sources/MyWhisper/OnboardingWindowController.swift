@@ -94,6 +94,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         stack.addArrangedSubview(heading)
 
         stack.addArrangedSubview(boxed(title: "Permissions", content: buildPermissionsSection()))
+        stack.addArrangedSubview(boxed(title: "Your language", content: buildLanguageSection()))
         stack.addArrangedSubview(boxed(title: "Speech model", content: buildModelSection()))
         stack.addArrangedSubview(boxed(title: "AI modes (optional)", content: buildAIModesSection()))
         stack.addArrangedSubview(boxed(title: "Try it", content: buildTryItSection()))
@@ -133,6 +134,46 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     // MARK: - Section 1: Permissions
+
+    /// Language picker, up front: Auto-detect frequently mislabels accented
+    /// or code-switched speech (e.g. Indonesian-accented English comes out as
+    /// Malay), so first-run users should pin their language before the first
+    /// dictation instead of discovering this the hard way.
+    private func buildLanguageSection() -> NSView {
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 6
+
+        let hint = NSTextField(wrappingLabelWithString:
+            "Pick the language you dictate in. If you mix two languages in one "
+            + "sentence, pick a Mixed pack — Auto-detect can guess wrong on "
+            + "accented or mixed speech.")
+        hint.textColor = .secondaryLabelColor
+        hint.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        hint.preferredMaxLayoutWidth = 440
+
+        let popup = NSPopUpButton(frame: .zero, pullsDown: false)
+        for language in Settings.languages {
+            popup.addItem(withTitle: language.name)
+            popup.lastItem?.representedObject = language.code
+        }
+        if let index = Settings.languages.firstIndex(where: { $0.code == Settings.shared.language }) {
+            popup.selectItem(at: index)
+        }
+        popup.target = self
+        popup.action = #selector(languagePicked(_:))
+
+        stack.addArrangedSubview(hint)
+        stack.addArrangedSubview(popup)
+        return stack
+    }
+
+    @objc private func languagePicked(_ sender: NSPopUpButton) {
+        if let code = sender.selectedItem?.representedObject as? String {
+            Settings.shared.language = code
+        }
+    }
 
     private func buildPermissionsSection() -> NSView {
         let stack = NSStackView()
