@@ -25,8 +25,35 @@ struct Lexicon {
         self.replacements = replacements
     }
 
+    /// mtime-based cache for the default production file, so preview ticks
+    /// (~1.5s) and finals don't re-read/re-decode replacements.json every call.
+    /// `cachedMTime` is nil when the file was missing at cache time; a cache
+    /// entry always exists once `load()` has run once (so repeated misses
+    /// just compare nil == nil instead of re-attempting a decode).
+    private static var cachedLexicon: Lexicon?
+    private static var cachedMTime: Date?
+    private static var hasCached = false
+    private static let cacheLock = NSLock()
+
     static func load() -> Lexicon {
-        load(from: fileURL)
+        let url = fileURL
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let currentMTime = attributes?[.modificationDate] as? Date
+
+        cacheLock.lock()
+        if hasCached, cachedMTime == currentMTime, let cached = cachedLexicon {
+            cacheLock.unlock()
+            return cached
+        }
+        cacheLock.unlock()
+
+        let fresh = load(from: url)
+        cacheLock.lock()
+        cachedLexicon = fresh
+        cachedMTime = currentMTime
+        hasCached = true
+        cacheLock.unlock()
+        return fresh
     }
 
     static func load(from url: URL) -> Lexicon {

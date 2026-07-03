@@ -3,11 +3,12 @@ import Foundation
 enum WavWriter {
     /// Encodes float samples in [-1, 1] as a 16-bit PCM mono WAV file.
     static func data(fromSamples samples: [Float], sampleRate: UInt32 = 16000) -> Data {
-        var pcm = Data(capacity: samples.count * 2)
-        for sample in samples {
-            let clamped = max(-1.0, min(1.0, sample))
-            pcm.appendLE(Int16(clamped * 32767))
+        var int16Samples = [Int16](repeating: 0, count: samples.count)
+        for i in 0..<samples.count {
+            let clamped = max(-1.0, min(1.0, samples[i]))
+            int16Samples[i] = Int16(clamped * 32767).littleEndian
         }
+        let pcm = int16Samples.withUnsafeBufferPointer { Data(buffer: $0) }
         var wav = Data(capacity: pcm.count + 44)
         wav.append(contentsOf: Array("RIFF".utf8))
         wav.appendLE(UInt32(36 + pcm.count))

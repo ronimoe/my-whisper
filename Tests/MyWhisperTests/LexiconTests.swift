@@ -77,4 +77,24 @@ final class LexiconTests: XCTestCase {
         XCTAssertEqual(lexicon.apply(to: "unchanged text"), "unchanged text")
         XCTAssertNil(lexicon.vocabularyPrompt)
     }
+
+    func testLoadFromURLIsUncachedAcrossSuccessiveCalls() {
+        // load(from:) must always re-read from disk (unlike the no-arg
+        // load(), which caches the default production file by mtime).
+        let url = write("""
+        {
+          "vocabulary": ["alpha"]
+        }
+        """)
+        let first = Lexicon.load(from: url)
+        XCTAssertEqual(first.vocabularyPrompt, "alpha")
+
+        _ = write("""
+        {
+          "vocabulary": ["beta", "gamma"]
+        }
+        """, name: url.lastPathComponent)
+        let second = Lexicon.load(from: url)
+        XCTAssertEqual(second.vocabularyPrompt, "beta, gamma")
+    }
 }
