@@ -14,9 +14,14 @@ INSTALL (one time, ~2 minutes)
    model from the app: menu bar icon → Setup Assistant → Download.
 
 3. Open MyWhisper.app. macOS will block it the first time because
-   this free build isn't notarized by Apple:
-   → System Settings → Privacy & Security → scroll down →
-     "MyWhisper.app was blocked…" → click "Open Anyway".
+   this free build isn't notarized by Apple. You'll see:
+     '"MyWhisper.app" Not Opened' with only [Move to Trash] [Done].
+   This is normal for free apps outside the App Store. Do this:
+   → Click "Done" (NOT "Move to Trash"!)
+   → System Settings → Privacy & Security → scroll all the way down →
+     "MyWhisper.app was blocked…" → click "Open Anyway" → confirm
+     (macOS may ask for your password).
+   → One time only — after this it opens normally.
 
 4. Grant the two permissions it asks for:
    - Microphone (to hear you)

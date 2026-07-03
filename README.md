@@ -32,8 +32,12 @@ Apple Silicon · macOS 13+ · free.
 **DMG (no developer tools needed):**
 
 1. Open the DMG and drag **MyWhisper.app** into Applications.
-2. Open it — since this free build isn't notarized, macOS will block it
-   once: **System Settings → Privacy & Security → Open Anyway**.
+2. Open it. macOS shows **"MyWhisper.app" Not Opened** with only
+   *Move to Trash* / *Done* — this is Apple's standard warning for any
+   free app that isn't notarized ($99/yr developer account), not a
+   problem with the app. Click **Done** (not Move to Trash!), then
+   **System Settings → Privacy & Security → scroll down → Open Anyway**
+   and confirm. One time only.
 3. Grant **Microphone** and **Accessibility** when prompted (or via the
    in-app Setup Assistant).
 4. Tap **⌥Space** and start dictating — a small starter model is bundled,

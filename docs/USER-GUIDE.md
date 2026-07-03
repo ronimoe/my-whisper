@@ -13,14 +13,19 @@ using, entirely on your own Mac. No account, no cloud, no subscription.
 2. Open **MyWhisper.app** (double-click it in Applications, or in the DMG).
    Because this free build isn't notarized by Apple (notarization needs a
    paid Apple Developer account, which this project doesn't have yet), macOS
-   will refuse to open it the first time and show a warning. This doesn't
-   mean anything is wrong with the app — it's just Apple's standard warning
-   for any app that isn't distributed through the App Store or a paid
-   developer certificate. To open it anyway:
+   will refuse to open it the first time and show a warning that says
+   **""MyWhisper.app" Not Opened — Apple could not verify "MyWhisper.app"
+   is free of malware"**, offering only two buttons: **Move to Trash** and
+   **Done**. This doesn't mean anything is wrong with the app — it's just
+   Apple's standard warning for any app that isn't distributed through the
+   App Store or a paid developer certificate. To open it anyway:
+   - Click **Done** — do NOT click "Move to Trash".
    - Go to **System Settings → Privacy & Security**.
-   - Scroll down — you'll see a line like *"MyWhisper.app was blocked to
-     protect your Mac."*
-   - Click **Open Anyway**, then confirm in the dialog that appears.
+   - Scroll all the way down — you'll see a line like *"MyWhisper.app was
+     blocked to protect your Mac"* with an **Open Anyway** button.
+   - Click **Open Anyway**, then confirm in the dialog that appears (macOS
+     may ask for your password or Touch ID).
+   - You only do this once — from then on the app opens normally.
 3. MyWhisper's icon (a small waveform) appears in your menu bar, top-right of
    the screen. **It works immediately** — a small starter speech model is
    bundled inside the app, so you can dictate right away without downloading
