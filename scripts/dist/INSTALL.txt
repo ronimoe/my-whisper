@@ -7,13 +7,11 @@ never leaves your Mac. Free.
 INSTALL (one time, ~2 minutes)
 ------------------------------
 
-1. Drag MyWhisper.app into your Applications folder.
+1. Drag MyWhisper into the Applications folder shown in this window.
 
 2. OPTIONAL — MyWhisper works out of the box with the included starter
    model. For best accuracy (especially non-English), download the full
    model from the app: menu bar icon → Setup Assistant → Download.
-   (Or double-click "Download Model.command", ~1.5 GB, one time. If
-   macOS blocks it: right-click the file → Open → Open.)
 
 3. Open MyWhisper.app. macOS will block it the first time because
    this free build isn't notarized by Apple:

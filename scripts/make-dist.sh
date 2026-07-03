@@ -45,11 +45,53 @@ STAGE=build/dist/MyWhisper
 rm -rf build/dist
 mkdir -p "$STAGE"
 cp -R build/MyWhisper.app "$STAGE/"
-cp scripts/dist/Download-Model.command "$STAGE/Download Model.command"
 cp scripts/dist/INSTALL.txt "$STAGE/README.txt"
-chmod +x "$STAGE/Download Model.command"
+ln -s /Applications "$STAGE/Applications"
 
 DMG="build/MyWhisper-$VERSION.dmg"
 rm -f "$DMG"
-hdiutil create -quiet -volname "MyWhisper" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+
+# Detach any stale mount from a previous run before we build a fresh one.
+if [[ -d /Volumes/MyWhisper ]]; then
+  hdiutil detach "/Volumes/MyWhisper" -force || true
+fi
+
+# Build a read-write staging image so Finder can set icon positions on it.
+RW_DMG=build/tmp-rw.dmg
+rm -f "$RW_DMG"
+hdiutil create -quiet -volname "MyWhisper" -srcfolder "$STAGE" -ov -format UDRW -fs HFS+ "$RW_DMG"
+
+hdiutil attach "$RW_DMG" -noautoopen
+
+# Style the volume: icon view, no toolbar, fixed window bounds, and explicit
+# icon positions (app on the left, /Applications alias on the right).
+osascript <<'OSA'
+tell application "Finder"
+  tell disk "MyWhisper"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set bounds of container window to {200, 120, 840, 560}
+    set theViewOptions to the icon view options of container window
+    set arrangement of theViewOptions to not arranged
+    set icon size of theViewOptions to 100
+    set text size of theViewOptions to 13
+    set position of item "MyWhisper.app" of container window to {160, 175}
+    set position of item "Applications" of container window to {480, 175}
+    set position of item "README.txt" of container window to {320, 350}
+    update without registering applications
+    delay 1
+    close
+  end tell
+end tell
+OSA
+
+sync
+sleep 2
+hdiutil detach "/Volumes/MyWhisper" || { sleep 2; hdiutil detach "/Volumes/MyWhisper" -force; }
+
+hdiutil convert -quiet "$RW_DMG" -format UDZO -o "$DMG"
+rm -f "$RW_DMG"
+
 echo "$DMG"
