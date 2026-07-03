@@ -201,6 +201,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                               bundleId: dictationContext.bundleId,
                                               in: AppProfileStore.load())
         lastPartial = nil
+        // Auto-detect flip-flops between languages on very short preview
+        // windows (especially on the small starter model); require 2 s of
+        // audio before the first partial when no language is pinned.
+        let previewLang = EffectiveDictation.resolve(
+            language: Settings.shared.language,
+            modeName: Settings.shared.currentModeName,
+            spokenPunctuation: Settings.shared.spokenPunctuationEnabled,
+            translate: Settings.shared.translateToEnglish,
+            profile: activeProfile).language
+        previewScheduler.minSamples = previewLang == "auto" ? 32000 : 16000
         do {
             recorder.autoStopEnabled = Settings.shared.autoStopEnabled
             try recorder.start()
@@ -389,7 +399,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     await MainActor.run {
                         self.isTranscribing = false
                         self.statusController.setStatus(.idle)
-                        let pasted = TextInserter.insert(text)
+                        // When the Setup Assistant's try-it box is the active
+                        // target, insert directly — synthetic ⌘V into our own
+                        // window is unreliable (clipboard/restore race under
+                        // load, placeholder text still in the view).
+                        let pasted = OnboardingWindowController.shared.insertTranscript(text)
+                            || TextInserter.insert(text)
                         if !pasted {
                             Notifier.show(title: "Copied to clipboard",
                                           body: "Grant Accessibility permission to paste automatically.")

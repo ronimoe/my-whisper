@@ -695,6 +695,16 @@ in macOS's standard `UserDefaults`/`defaults` system under the identifier
 
 ## 14. Troubleshooting
 
+**Live preview flickers between languages while I speak.** On
+**Auto-detect**, whisper re-guesses the language for every ~1.5 s preview
+snippet, and short snippets (especially on the bundled starter model) are
+easy to misjudge — the preview text can wander through other languages
+mid-recording. This is cosmetic: the **final pasted text** is transcribed
+from your complete recording, which detects far more reliably. To stop the
+flicker entirely, pin your language (menu → Language) or use a Mixed pack
+if you code-switch; it also improves a lot once the full large-v3-turbo
+model is downloaded.
+
 **"No model — run: make model" / model missing.** MyWhisper couldn't find
 any speech model — happens only on a bare/dev build with no bundled starter
 and nothing yet downloaded to `~/Library/Application

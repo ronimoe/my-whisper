@@ -519,12 +519,34 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         return stack
     }
 
-    /// NSTextView has no built-in placeholder, so we show light gray hint
-    /// text and clear it on first click via a delegate-free simple approach:
-    /// swap in a placeholder string that gets replaced on first keystroke.
+    /// NSTextView has no built-in placeholder, so we show gray hint TEXT that
+    /// is really in the view; `tryItPlaceholderActive` tracks it so the first
+    /// transcript insertion (or programmatic clear) replaces it wholesale.
+    private var tryItPlaceholderActive = false
+
     private func placeholderString(for textView: NSTextView, hotkey: String) {
         textView.string = "Click here, press \(hotkey) and speak — your words will appear."
         textView.textColor = .placeholderTextColor
+        tryItPlaceholderActive = true
+    }
+
+    /// Direct-inserts a dictation transcript into the try-it box, bypassing
+    /// the clipboard + synthetic ⌘V path (which is unreliable when the paste
+    /// target is our own window, e.g. under heavy load during model
+    /// downloads). Returns false when the wizard isn't the active paste
+    /// target so the caller falls back to the normal paste path.
+    func insertTranscript(_ text: String) -> Bool {
+        guard let window, window.isVisible, window.isKeyWindow,
+              let textView = tryItTextView else { return false }
+        if tryItPlaceholderActive {
+            textView.string = ""
+            textView.textColor = .labelColor
+            tryItPlaceholderActive = false
+        }
+        let current = textView.string
+        textView.string = current.isEmpty ? text : current + " " + text
+        textView.textColor = .labelColor
+        return true
     }
 
     // MARK: - Footer
