@@ -241,12 +241,21 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
             return
         }
         if let modelURL = Settings.shared.resolveModelURL() {
-            let name = Settings.displayName(forModel: modelURL)
-            modelStatusLabel.stringValue = "\u{2705} Model ready: \(name)"
-            modelDownloadButton.isHidden = true
-            modelCancelButton.isHidden = true
-            modelProgressBar.isHidden = true
-            modelByteLabel.isHidden = true
+            if Settings.isBundledStarter(modelURL) {
+                modelStatusLabel.stringValue =
+                    "\u{2705} Starter model included (small) — download the full model for best accuracy"
+                modelDownloadButton.isHidden = false
+                modelCancelButton.isHidden = true
+                modelProgressBar.isHidden = true
+                modelByteLabel.isHidden = true
+            } else {
+                let name = Settings.displayName(forModel: modelURL)
+                modelStatusLabel.stringValue = "\u{2705} Model ready: \(name)"
+                modelDownloadButton.isHidden = true
+                modelCancelButton.isHidden = true
+                modelProgressBar.isHidden = true
+                modelByteLabel.isHidden = true
+            }
         } else {
             modelStatusLabel.stringValue =
                 "Download the recommended model (large-v3-turbo, ~1.5 GB, one time)"

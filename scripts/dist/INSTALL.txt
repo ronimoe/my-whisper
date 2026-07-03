@@ -9,9 +9,11 @@ INSTALL (one time, ~2 minutes)
 
 1. Drag MyWhisper.app into your Applications folder.
 
-2. Double-click "Download Model.command" to fetch the speech model
-   (~1.5 GB, one time). If macOS blocks it: right-click the file →
-   Open → Open.
+2. OPTIONAL — MyWhisper works out of the box with the included starter
+   model. For best accuracy (especially non-English), download the full
+   model from the app: menu bar icon → Setup Assistant → Download.
+   (Or double-click "Download Model.command", ~1.5 GB, one time. If
+   macOS blocks it: right-click the file → Open → Open.)
 
 3. Open MyWhisper.app. macOS will block it the first time because
    this free build isn't notarized by Apple:
@@ -35,6 +37,7 @@ PRIVACY
 -------
 
 No accounts, no telemetry, no cloud. The only network connections
-the app makes are to itself (localhost). The one-time model
-download (step 2) fetches from Hugging Face; after that, everything
-is fully offline.
+the app makes are to itself (localhost). The included starter model
+means step 2 is optional; if you choose to download the full model,
+that one-time download fetches from Hugging Face — after that,
+everything is fully offline.

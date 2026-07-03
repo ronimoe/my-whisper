@@ -192,19 +192,71 @@ final class Settings {
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
-    func resolveModelURL() -> URL? {
-        if let path = modelPath, FileManager.default.fileExists(atPath: path) {
+    /// Preferred model name ordering, most- to least-capable. Keep in sync
+    /// with pickModel's doc comment — this is the single source of truth.
+    private static let preferredModelNames = ["large-v3-turbo", "large-v3-turbo-q5_0", "large-v3",
+                                               "medium", "small", "base", "tiny"]
+
+    /// Pure model-selection logic, factored out of resolveModelURL() so it's
+    /// testable without touching disk. Selection order:
+    /// 1. `explicitPath`, if `explicitPathExists` is true (caller has already
+    ///    checked FileManager, or pre-validated some other way).
+    /// 2. The best-named match in `userModels` per `preferredModelNames`.
+    /// 3. The first entry of `userModels` (matches availableModels() sort order).
+    /// 4. `bundledStarter`, the small model shipped inside the app bundle.
+    /// Returns nil only when every input is empty/missing.
+    static func pickModel(explicitPath: String?, explicitPathExists: Bool,
+                           userModels: [URL], bundledStarter: URL?) -> URL? {
+        if let path = explicitPath, explicitPathExists {
             return URL(fileURLWithPath: path)
         }
-        let models = availableModels()
-        let preferred = ["large-v3-turbo", "large-v3-turbo-q5_0", "large-v3",
-                         "medium", "small", "base", "tiny"]
-        for name in preferred {
-            if let hit = models.first(where: { $0.lastPathComponent == "ggml-\(name).bin" }) {
+        for name in preferredModelNames {
+            if let hit = userModels.first(where: { $0.lastPathComponent == "ggml-\(name).bin" }) {
                 return hit
             }
         }
-        return models.first
+        if let first = userModels.first {
+            return first
+        }
+        return bundledStarter
+    }
+
+    /// First `ggml-*.bin` found directly inside the app bundle's
+    /// `Resources/models/` directory, i.e. the small starter model bundled
+    /// for instant-dictation-on-first-launch. nil for bare CLI/dev builds
+    /// that have no app bundle (Bundle.main.resourceURL is nil there).
+    static var bundledStarterURL: URL? {
+        guard let resources = Bundle.main.resourceURL else { return nil }
+        let modelsDir = resources.appendingPathComponent("models", isDirectory: true)
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: modelsDir, includingPropertiesForKeys: nil)) ?? []
+        return files
+            .filter { $0.pathExtension == "bin" && $0.lastPathComponent.hasPrefix("ggml-") }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .first
+    }
+
+    /// True if `url` lives under `resourceURL` (the app bundle's Resources
+    /// directory) — i.e. it's the bundled starter model, not a user-downloaded
+    /// one in modelsDir. Pure/testable form; `isBundledStarter(_:)` below
+    /// supplies the real Bundle.main.resourceURL.
+    static func isBundledStarter(_ url: URL, under resourceURL: URL?) -> Bool {
+        guard let resourceURL else { return false }
+        let resourcePath = resourceURL.standardizedFileURL.path
+        let candidatePath = url.standardizedFileURL.path
+        return candidatePath.hasPrefix(resourcePath + "/")
+    }
+
+    static func isBundledStarter(_ url: URL) -> Bool {
+        isBundledStarter(url, under: Bundle.main.resourceURL)
+    }
+
+    func resolveModelURL() -> URL? {
+        Self.pickModel(
+            explicitPath: modelPath,
+            explicitPathExists: modelPath.map { FileManager.default.fileExists(atPath: $0) } ?? false,
+            userModels: availableModels(),
+            bundledStarter: Self.bundledStarterURL)
     }
 
     static let languages: [(code: String, name: String)] = [
