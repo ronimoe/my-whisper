@@ -64,6 +64,7 @@ setting) are in the [User Guide](docs/USER-GUIDE.md).
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Build prerequisites, every Makefile target, scripts reference, conventions, how-to recipes for common changes |
 | [docs/RELEASE.md](docs/RELEASE.md) | How to build and ship a DMG, free and notarized |
 | [docs/PORTING.md](docs/PORTING.md) | Honest scoping for a Windows/Linux port |
+| [docs/IPAD.md](docs/IPAD.md) | Honest scoping for an iPad app: what ports, what's a rewrite, the keyboard-extension memory wall |
 | [PRIVACY.md](PRIVACY.md) | What runs where, what never happens, how it's checked |
 | [LICENSE](LICENSE) | MIT license |
 | [todos.md](todos.md) | Pending verifications and future-release ideas |
