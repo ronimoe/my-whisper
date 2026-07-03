@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Hardened-runtime entitlements for the notarized build.
+	     Used by scripts/notarize.sh; the local dev build does not need them. -->
+
+	<!-- Microphone capture under the hardened runtime. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+
+	<!-- ggml loads its backend libraries (Metal/CPU) with dlopen at runtime;
+	     without this, library validation blocks any dylib not signed by the
+	     same team (relevant when bundling libwhisper/ggml for the in-process
+	     engine). Keep enabled unless all bundled dylibs are re-signed with
+	     the same Developer ID. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>
