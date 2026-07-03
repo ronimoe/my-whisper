@@ -154,6 +154,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         replacementsItem.target = self
         menu.addItem(replacementsItem)
 
+        let appProfilesItem = NSMenuItem(title: "Edit App Profiles…",
+                                         action: #selector(editAppProfiles), keyEquivalent: "")
+        appProfilesItem.target = self
+        menu.addItem(appProfilesItem)
+
         let soundItem = NSMenuItem(title: "Sound Cues", action: #selector(toggleSoundCues), keyEquivalent: "")
         soundItem.target = self
         soundItem.state = Settings.shared.soundCues ? .on : .off
@@ -366,6 +371,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc private func editTextReplacements() {
         Lexicon.ensureFileExists()
         NSWorkspace.shared.open(Lexicon.fileURL)
+    }
+
+    @objc private func editAppProfiles() {
+        AppProfileStore.ensureFileExists()
+        NSWorkspace.shared.open(AppProfileStore.fileURL)
     }
 
     @objc private func selectMode(_ sender: NSMenuItem) {

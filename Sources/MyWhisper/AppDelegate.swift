@@ -11,7 +11,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var previewScheduler = PartialScheduler()
     private var previewInFlight = false
     private var previewTask: Task<Void, Never>?
-    private var dictationContext = ModeContext.Captured(appName: nil, selection: nil)
+    private var dictationContext = ModeContext.Captured(appName: nil, selection: nil, bundleId: nil)
+    /// The per-app profile matched for the current dictation, computed once in
+    /// beginDictation from the captured frontmost app. nil when no rule matched.
+    private var activeProfile: AppProfile?
     /// True from the moment finishDictation commits to transcribing until
     /// the result (or error) is handled, so a hotkey/menu press mid-transcribe
     /// can't start a second, overlapping recording.
@@ -192,13 +195,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         _ = engine
         dictationContext = ModeContext.capture()
+        activeProfile = AppProfileStore.match(appName: dictationContext.appName,
+                                              bundleId: dictationContext.bundleId,
+                                              in: AppProfileStore.load())
         lastPartial = nil
         do {
             recorder.autoStopEnabled = Settings.shared.autoStopEnabled
             try recorder.start()
             statusController.setStatus(.recording)
             if Settings.shared.soundCues { NSSound(named: "Pop")?.play() }
-            RecordingPill.shared.show()
+            RecordingPill.shared.show(captionOverride: effectiveCaption())
             hotKeys.registerSecondary(keyCode: 53, modifiers: 0) // Escape, only while recording
             if Settings.shared.livePreviewEnabled {
                 startPreviewTimer()
@@ -206,6 +212,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             statusController.setStatus(.error(error.localizedDescription))
         }
+    }
+
+    /// Builds the RecordingPill caption ("Language · Mode") from the
+    /// EFFECTIVE settings — base Settings merged with any matched app
+    /// profile — so the pill reflects what will actually be applied.
+    private func effectiveCaption() -> String {
+        let eff = EffectiveDictation.resolve(language: Settings.shared.language,
+                                             modeName: Settings.shared.currentModeName,
+                                             spokenPunctuation: Settings.shared.spokenPunctuationEnabled,
+                                             translate: Settings.shared.translateToEnglish,
+                                             profile: activeProfile)
+        let name = Settings.languages.first(where: { $0.code == eff.language })?.name ?? eff.language
+        if eff.modeName != "Raw" {
+            return "\(name) · \(eff.modeName)"
+        }
+        return name
     }
 
     private func startPreviewTimer() {
@@ -278,6 +300,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let samples = recorder.stop()
         let partial = lastPartial
         lastPartial = nil
+        let profile = activeProfile
+        activeProfile = nil
         if Settings.shared.soundCues { NSSound(named: "Tink")?.play() }
         guard samples.count > 3200 else { // ignore recordings under 0.2 s
             statusController.setStatus(.idle)
@@ -286,8 +310,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let engine else { return }
         statusController.setStatus(.transcribing)
         isTranscribing = true
-        let language = Settings.shared.language
-        let translate = Settings.shared.translateToEnglish
+        let eff = EffectiveDictation.resolve(language: Settings.shared.language,
+                                             modeName: Settings.shared.currentModeName,
+                                             spokenPunctuation: Settings.shared.spokenPunctuationEnabled,
+                                             translate: Settings.shared.translateToEnglish,
+                                             profile: profile)
         let lexicon = Lexicon.load()
         let context = dictationContext
         let pipeline = DictationPipeline(engine: engine)
@@ -304,19 +331,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         rawTranscript: partial.rawText,
                         lexicon: lexicon,
                         voiceCommandsEnabled: Settings.shared.voiceCommandsEnabled,
-                        spokenPunctuationEnabled: Settings.shared.spokenPunctuationEnabled,
-                        modeName: Settings.shared.currentModeName, modes: ModeStore.load(),
+                        spokenPunctuationEnabled: eff.spokenPunctuation,
+                        modeName: eff.modeName, modes: ModeStore.load(),
                         context: context,
                         ollamaModel: Settings.shared.ollamaModel,
                         ollamaBaseURL: Settings.shared.ollamaBaseURL)
                 } else {
                     result = try await pipeline.run(
-                        samples: samples, language: language,
-                        mixedPrimary: Settings.shared.mixedPrimary, translate: translate,
+                        samples: samples, language: eff.language,
+                        mixedPrimary: Settings.shared.mixedPrimary, translate: eff.translate,
                         lexicon: lexicon,
                         voiceCommandsEnabled: Settings.shared.voiceCommandsEnabled,
-                        spokenPunctuationEnabled: Settings.shared.spokenPunctuationEnabled,
-                        modeName: Settings.shared.currentModeName, modes: ModeStore.load(),
+                        spokenPunctuationEnabled: eff.spokenPunctuation,
+                        modeName: eff.modeName, modes: ModeStore.load(),
                         context: context,
                         ollamaModel: Settings.shared.ollamaModel,
                         ollamaBaseURL: Settings.shared.ollamaBaseURL)
@@ -354,7 +381,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                           body: "Grant Accessibility permission to paste automatically.")
                         }
                         if Settings.shared.historyEnabled {
-                            HistoryStore.shared.append(text: text, language: language)
+                            HistoryStore.shared.append(text: text, language: eff.language)
                         }
                     }
                 }

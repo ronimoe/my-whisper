@@ -7,6 +7,7 @@ enum ModeContext {
     struct Captured {
         let appName: String?
         let selection: String?
+        let bundleId: String?
     }
 
     private static let selectionCharacterLimit = 2000
@@ -23,8 +24,9 @@ enum ModeContext {
     /// OS-bound capture of the frontmost app's name and the current
     /// Accessibility-API text selection. Not unit tested.
     static func capture() -> Captured {
-        let appName = NSWorkspace.shared.frontmostApplication?.localizedName
-        return Captured(appName: appName, selection: captureSelection())
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        return Captured(appName: frontmost?.localizedName, selection: captureSelection(),
+                        bundleId: frontmost?.bundleIdentifier)
     }
 
     private static func captureSelection() -> String? {

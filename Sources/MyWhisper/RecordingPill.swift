@@ -33,14 +33,16 @@ final class RecordingPill {
     private init() {}
 
     /// Builds (if needed) and shows the pill, starting the meter and elapsed
-    /// timers. Safe to call repeatedly.
-    func show() {
+    /// timers. Safe to call repeatedly. `captionOverride`, when non-nil,
+    /// replaces the caption normally derived from Settings — used to reflect
+    /// an app profile's effective language/mode rather than the base settings.
+    func show(captionOverride: String? = nil) {
         if panel == nil { buildPanel() }
         guard let panel, let elapsedLabel, let captionLabel, let textLabel else { return }
 
         startDate = Date()
         elapsedLabel.stringValue = Self.formatElapsed(0)
-        captionLabel.stringValue = captionText()
+        captionLabel.stringValue = captionOverride ?? captionText()
         textLabel.stringValue = ""
 
         layout(panel: panel, textLabel: textLabel)
