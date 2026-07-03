@@ -53,6 +53,11 @@ final class WhisperServerManager: TranscriptionEngine {
     private let port: Int
     private var process: Process?
     private let logURL = Settings.appSupportDir.appendingPathComponent("whisper-server.log")
+    /// The FileHandle currently wired up as the child process's stdout/stderr.
+    /// Stored so it can be closed explicitly — otherwise each restartServer()
+    /// (stop() + start()) leaks one fd, since a local `let log` in start() is
+    /// never closed once the Process holds a reference to it.
+    private var logHandle: FileHandle?
 
     init(serverBinary: URL, modelURL: URL, port: Int) {
         self.serverBinary = serverBinary
@@ -132,10 +137,16 @@ final class WhisperServerManager: TranscriptionEngine {
             "--port", String(port),
             "--threads", String(max(4, ProcessInfo.processInfo.activeProcessorCount - 2)),
         ]
+        // Close any previous handle before opening a new one — restartServer()
+        // calls stop() then start(), and without this each cycle would leak
+        // the prior invocation's fd.
+        logHandle?.closeFile()
+        logHandle = nil
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         if let log = try? FileHandle(forWritingTo: logURL) {
             proc.standardOutput = log
             proc.standardError = log
+            logHandle = log
         }
         proc.terminationHandler = { [weak self] finished in
             guard let self else { return }
@@ -164,6 +175,8 @@ final class WhisperServerManager: TranscriptionEngine {
         setState(.stopped)
         process?.terminate()
         process = nil
+        logHandle?.closeFile()
+        logHandle = nil
     }
 
     private func pollUntilReady() {

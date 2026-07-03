@@ -26,6 +26,7 @@ final class ModelDownloader: NSObject {
         case alreadyDownloading
         case httpStatus(Int)
         case moveFailed(String)
+        case sizeMismatch(String)
 
         var errorDescription: String? {
             switch self {
@@ -35,8 +36,29 @@ final class ModelDownloader: NSObject {
                 return "Download failed (server returned status \(code))."
             case .moveFailed(let message):
                 return "Couldn't save the downloaded model: \(message)"
+            case .sizeMismatch(let message):
+                return message
             }
         }
+    }
+
+    /// Minimum plausible size for any ggml whisper model file; anything
+    /// smaller is certainly a truncated/failed download, not a real model.
+    static let minimumModelBytes: Int64 = 1024 * 1024
+
+    /// Pure validation of a completed download's size: nil means ok, a
+    /// non-nil message means the download must be rejected. `expected` is the
+    /// HTTP response's `totalBytesExpectedToWrite`/Content-Length; nil or
+    /// <= 0 means "unknown" (some servers omit Content-Length), in which case
+    /// only the absolute minimum-size floor applies.
+    static func validateSize(actual: Int64, expected: Int64?) -> String? {
+        if actual < minimumModelBytes {
+            return "download too small (\(actual) bytes) — no whisper model is under 1 MB; try again"
+        }
+        if let expected, expected > 0, actual != expected {
+            return "download incomplete (\(actual) of \(expected) bytes) — try again"
+        }
+        return nil
     }
 
     /// https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-<name>.bin
@@ -143,6 +165,19 @@ extension ModelDownloader: URLSessionDownloadDelegate {
         do {
             try? FileManager.default.removeItem(at: partial)
             try FileManager.default.moveItem(at: location, to: partial)
+
+            // Verify the download is complete before committing it as the
+            // model: a truncated transfer must not be silently accepted.
+            let attributes = try FileManager.default.attributesOfItem(atPath: partial.path)
+            let actualSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+            let expectedSize = downloadTask.countOfBytesExpectedToReceive
+            if let message = Self.validateSize(actual: actualSize,
+                                               expected: expectedSize > 0 ? expectedSize : nil) {
+                try? FileManager.default.removeItem(at: partial)
+                finish(.failure(DownloadError.sizeMismatch(message)))
+                return
+            }
+
             try? FileManager.default.removeItem(at: destination)
             try FileManager.default.moveItem(at: partial, to: destination)
             try FileManager.default.setAttributes(

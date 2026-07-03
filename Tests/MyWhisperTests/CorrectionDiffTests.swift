@@ -62,6 +62,17 @@ final class CorrectionDiffTests: XCTestCase {
         XCTAssertNil(CorrectionDiff.suggestRule(original: "send now", corrected: "send it now"))
     }
 
+    /// Deleting a word during correction must NOT produce a rule with an empty
+    /// replace — that would silently delete the word from every future
+    /// transcript ("it" here). Symmetric with the pure-insertion cases.
+    func testPureDeletionOfWordReturnsNil() {
+        XCTAssertNil(CorrectionDiff.suggestRule(original: "please send it now", corrected: "please send now"))
+    }
+
+    func testPureDeletionMiddleReturnsNil() {
+        XCTAssertNil(CorrectionDiff.suggestRule(original: "a x b", corrected: "a b"))
+    }
+
     func testFindLongerThan60CharsReturnsNil() {
         let original = String(repeating: "x", count: 70)
         let corrected = String(repeating: "y", count: 70)

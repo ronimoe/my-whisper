@@ -25,3 +25,14 @@ frontmost app. Swift Package Manager, AppKit, no Xcode project.
   Accessibility must be re-granted after rebuilds.
 - Test WAVs can be synthesized with `say -o test.wav --file-format=WAVE
   --data-format=LEI16@16000 "text"` (Indonesian voice: `-v Damayanti`).
+
+## Docs
+
+- `docs/USER-GUIDE.md` — beginner-friendly guide: install, every menu item,
+  settings, languages, AI modes, CLI, troubleshooting.
+- `docs/ARCHITECTURE.md` — data flow, engines, concurrency, file/permission
+  model, source-file map, test strategy.
+- `docs/PRODUCT.md` — vision, differentiators, feature inventory, roadmap.
+- `docs/DEVELOPMENT.md` — Makefile targets, scripts, conventions, how-to
+  recipes. `docs/RELEASE.md` and `docs/PORTING.md` cover shipping and a
+  Windows/Linux port.

@@ -53,7 +53,11 @@ enum CorrectionDiff {
         let find = midO.trimmingCharacters(in: .whitespaces)
         let replace = midC.trimmingCharacters(in: .whitespaces)
 
-        guard !find.isEmpty, find != replace, find.count <= maxFindLength else { return nil }
+        // An empty replace would create a delete-everywhere rule (e.g. correcting
+        // "send it now" → "send now" must NOT auto-delete every future "it"), so
+        // pure deletions are rejected just like pure insertions.
+        guard !find.isEmpty, !replace.isEmpty, find != replace,
+              find.count <= maxFindLength else { return nil }
         return (find, replace)
     }
 }

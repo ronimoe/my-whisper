@@ -78,6 +78,14 @@ final class ModeStoreTests: XCTestCase {
         let modes = ModeStore.load(from: url)
         XCTAssertEqual(modes.map(\.name), ["Custom"])
     }
+
+    func testEnsureFileExistsWritesFileWithOwnerOnlyPerms() {
+        let url = tempDir.appendingPathComponent("modes.json")
+        ModeStore.ensureFileExists(at: url)
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let perms = attributes?[.posixPermissions] as? NSNumber
+        XCTAssertEqual(perms?.uint16Value, 0o600)
+    }
 }
 
 final class OllamaRequestTests: XCTestCase {

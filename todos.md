@@ -7,7 +7,7 @@
       `docker exec agent-os-ollama ollama pull llama3.2` (or native install).
       Then: menu → Mode → Email, dictate, confirm rewritten paste; and
       `.build/release/MyWhisper --transcribe <wav> --mode Email`.
-- [ ] **Notarization** — prepared in `scripts/notarize.sh` + RELEASE.md;
+- [ ] **Notarization** — prepared in `scripts/notarize.sh` + docs/RELEASE.md;
       blocked on enrolling in the Apple Developer Program ($99/yr).
 
 ## Manual feel-checks (v2 feature sweep, 2026-07-03)
@@ -47,7 +47,14 @@
 - [ ] **Developer-first** — stdin/pipe CLI, AppleScript + URL scheme,
       code-aware formatting (camelCase/snake_case dictation).
 - [ ] **Pricing/positioning** — decide before public launch.
-- [ ] Windows/Linux port — scoped in PORTING.md.
+- [ ] Windows/Linux port — scoped in docs/PORTING.md.
 - [ ] Auto-update (Sparkle) — after notarization exists.
-- [ ] Lexicon/ModeStore JSON writes: tighten to 0600 like HistoryStore
-      (follow-up noted during the permissions fix).
+- [x] Lexicon/ModeStore/AppProfiles seed writes tightened to 0600 (fixed in
+      the 2026-07-03 fresh-eyes review batch, with tests).
+
+## Known design tradeoffs (documented, intentional)
+
+- Per-app profile + {app}/{selection} context are captured at RECORDING
+  START, not paste time — alt-tabbing mid-dictation pastes into the new app
+  using the original app's profile/context. Matches user intent in the
+  common case; revisit only if real users report confusion.

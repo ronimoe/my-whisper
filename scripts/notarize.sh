@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Notarized-distribution build. PREREQUISITES (one-time, needs a paid
-# Apple Developer account — see RELEASE.md):
+# Apple Developer account — see docs/RELEASE.md):
 #   1. A "Developer ID Application" certificate in the login keychain.
 #   2. Credentials stored for notarytool:
 #      xcrun notarytool store-credentials mywhisper \
@@ -14,7 +14,7 @@ SIGN_ID="${MYWHISPER_SIGN_ID:-}"
 PROFILE="${MYWHISPER_NOTARY_PROFILE:-mywhisper}"
 [[ -n "$SIGN_ID" ]] || { echo "set MYWHISPER_SIGN_ID to your 'Developer ID Application: …' identity" >&2; exit 1; }
 security find-identity -v -p codesigning | grep -q "Developer ID Application" || {
-  echo "no Developer ID Application certificate in the keychain — enroll first (RELEASE.md)" >&2; exit 1; }
+  echo "no Developer ID Application certificate in the keychain — enroll first (docs/RELEASE.md)" >&2; exit 1; }
 
 VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Resources/Info.plist)
 

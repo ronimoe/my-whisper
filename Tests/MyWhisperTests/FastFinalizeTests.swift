@@ -38,51 +38,90 @@ final class FastFinalizeTests: XCTestCase {
     // MARK: - shouldReuse
 
     func testNilPartialIsFalse() {
-        XCTAssertFalse(FastFinalize.shouldReuse(partial: nil, totalSamples: 16000, tailRMS: 0))
+        XCTAssertFalse(FastFinalize.shouldReuse(partial: nil, totalSamples: 16000, tailRMS: 0,
+                                                expectedLanguage: "en", expectedTranslate: false))
     }
 
     func testEmptyRawTextIsFalse() {
-        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "")
-        XCTAssertFalse(FastFinalize.shouldReuse(partial: partial, totalSamples: 16000, tailRMS: 0))
+        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "", language: "en", translate: false)
+        XCTAssertFalse(FastFinalize.shouldReuse(partial: partial, totalSamples: 16000, tailRMS: 0,
+                                                expectedLanguage: "en", expectedTranslate: false))
     }
 
     func testTailExactlyMaxTailSamplesAndSilentIsTrue() {
-        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world")
+        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world",
+                                           language: "en", translate: false)
         let total = 16000 + FastFinalize.maxTailSamples
         XCTAssertTrue(FastFinalize.shouldReuse(partial: partial, totalSamples: total,
-                                               tailRMS: FastFinalize.silentTailRMS - 0.001))
+                                               tailRMS: FastFinalize.silentTailRMS - 0.001,
+                                               expectedLanguage: "en", expectedTranslate: false))
     }
 
     func testTailOneSampleOverMaxIsFalse() {
-        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world")
+        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world",
+                                           language: "en", translate: false)
         let total = 16000 + FastFinalize.maxTailSamples + 1
-        XCTAssertFalse(FastFinalize.shouldReuse(partial: partial, totalSamples: total, tailRMS: 0))
+        XCTAssertFalse(FastFinalize.shouldReuse(partial: partial, totalSamples: total, tailRMS: 0,
+                                                expectedLanguage: "en", expectedTranslate: false))
     }
 
     func testLoudTailIsFalse() {
-        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world")
+        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world",
+                                           language: "en", translate: false)
         let total = 16000 + 1000
         XCTAssertFalse(FastFinalize.shouldReuse(partial: partial, totalSamples: total,
-                                                tailRMS: FastFinalize.silentTailRMS + 0.001))
+                                                tailRMS: FastFinalize.silentTailRMS + 0.001,
+                                                expectedLanguage: "en", expectedTranslate: false))
     }
 
     /// Buffer shrunk below the partial's snapshot count (shouldn't normally
     /// happen, but must be handled safely rather than trapping/underflowing).
     func testTotalSamplesLessThanPartialSampleCountIsFalse() {
-        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world")
-        XCTAssertFalse(FastFinalize.shouldReuse(partial: partial, totalSamples: 8000, tailRMS: 0))
+        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world",
+                                           language: "en", translate: false)
+        XCTAssertFalse(FastFinalize.shouldReuse(partial: partial, totalSamples: 8000, tailRMS: 0,
+                                                expectedLanguage: "en", expectedTranslate: false))
     }
 
     func testTailRMSAtThresholdIsFalse() {
         // tailRMS must be STRICTLY less than silentTailRMS.
-        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world")
+        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world",
+                                           language: "en", translate: false)
         XCTAssertFalse(FastFinalize.shouldReuse(partial: partial, totalSamples: 16000,
-                                                tailRMS: FastFinalize.silentTailRMS))
+                                                tailRMS: FastFinalize.silentTailRMS,
+                                                expectedLanguage: "en", expectedTranslate: false))
     }
 
     func testTotalSamplesEqualToPartialSampleCountWithSilentTailIsTrue() {
         // Zero-length tail: no extra audio at all since the snapshot.
-        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world")
-        XCTAssertTrue(FastFinalize.shouldReuse(partial: partial, totalSamples: 16000, tailRMS: 0))
+        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world",
+                                           language: "en", translate: false)
+        XCTAssertTrue(FastFinalize.shouldReuse(partial: partial, totalSamples: 16000, tailRMS: 0,
+                                               expectedLanguage: "en", expectedTranslate: false))
+    }
+
+    // MARK: - language/translate guard (Fix 1)
+
+    func testLanguageMismatchIsFalse() {
+        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world",
+                                           language: "en", translate: false)
+        XCTAssertFalse(FastFinalize.shouldReuse(partial: partial, totalSamples: 16000, tailRMS: 0,
+                                                expectedLanguage: "id", expectedTranslate: false))
+    }
+
+    func testTranslateMismatchIsFalse() {
+        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world",
+                                           language: "en", translate: false)
+        XCTAssertFalse(FastFinalize.shouldReuse(partial: partial, totalSamples: 16000, tailRMS: 0,
+                                                expectedLanguage: "en", expectedTranslate: true))
+    }
+
+    func testLanguageAndTranslateBothMatchingWithSilentShortTailIsTrue() {
+        let partial = FastFinalize.Partial(sampleCount: 16000, rawText: "hello world",
+                                           language: "id", translate: true)
+        let total = 16000 + 1000
+        XCTAssertTrue(FastFinalize.shouldReuse(partial: partial, totalSamples: total,
+                                               tailRMS: FastFinalize.silentTailRMS - 0.001,
+                                               expectedLanguage: "id", expectedTranslate: true))
     }
 }

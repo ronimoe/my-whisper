@@ -172,6 +172,33 @@ final class LexiconTests: XCTestCase {
         XCTAssertEqual(perms?.uint16Value, 0o600)
     }
 
+    // MARK: - ensureFileExists
+
+    func testEnsureFileExistsWritesExampleAndOwnerOnlyPerms() {
+        let url = tempDir.appendingPathComponent("replacements.json")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        Lexicon.ensureFileExists(at: url)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+
+        let lexicon = Lexicon.load(from: url)
+        XCTAssertEqual(lexicon.vocabularyPrompt, "MyWhisper, whisper.cpp")
+
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let perms = attributes?[.posixPermissions] as? NSNumber
+        XCTAssertEqual(perms?.uint16Value, 0o600)
+    }
+
+    func testEnsureFileExistsDoesNotOverwriteExistingFile() {
+        let url = write("""
+        {
+          "vocabulary": ["Custom"]
+        }
+        """)
+        Lexicon.ensureFileExists(at: url)
+        let lexicon = Lexicon.load(from: url)
+        XCTAssertEqual(lexicon.vocabularyPrompt, "Custom")
+    }
+
     func testAppendedRuleRoundTripsThroughLoadAndApply() {
         let url = write("""
         {

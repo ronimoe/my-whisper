@@ -9,11 +9,17 @@ import Foundation
 /// transcription — this never splices partial and tail text together.
 enum FastFinalize {
     /// The last completed live-preview partial: the sample count of the
-    /// recording at the moment the partial was requested, and its raw
-    /// (pre-Postprocess/lexicon) transcript.
+    /// recording at the moment the partial was requested, its raw
+    /// (pre-Postprocess/lexicon) transcript, and the language/translate it was
+    /// ACTUALLY transcribed under. The latter two guard against per-app
+    /// profiles changing the effective language/translate between the
+    /// preview tick and finishDictation — reusing a partial transcribed under
+    /// the wrong language/translate would silently paste the wrong text.
     struct Partial {
         let sampleCount: Int
         let rawText: String
+        let language: String
+        let translate: Bool
     }
 
     /// Max samples of audio allowed after the partial's snapshot (0.75 s @16 kHz).
@@ -40,9 +46,16 @@ enum FastFinalize {
     /// True iff reusing `partial.rawText` as the final transcript is safe:
     /// a partial exists with non-empty text, the recording hasn't shrunk
     /// below the partial's snapshot, the audio recorded since then is within
-    /// `maxTailSamples`, and that tail is silent.
-    static func shouldReuse(partial: Partial?, totalSamples: Int, tailRMS: Float) -> Bool {
+    /// `maxTailSamples`, that tail is silent, AND the partial was transcribed
+    /// under the same language/translate the final result is expected to use
+    /// (belt-and-braces guard against per-app profiles changing the effective
+    /// language/translate between the preview tick and finishDictation).
+    static func shouldReuse(partial: Partial?, totalSamples: Int, tailRMS: Float,
+                            expectedLanguage: String, expectedTranslate: Bool) -> Bool {
         guard let partial, !partial.rawText.isEmpty, totalSamples >= partial.sampleCount else {
+            return false
+        }
+        guard partial.language == expectedLanguage, partial.translate == expectedTranslate else {
             return false
         }
         let tailSamples = totalSamples - partial.sampleCount

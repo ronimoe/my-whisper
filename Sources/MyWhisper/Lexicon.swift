@@ -78,15 +78,16 @@ struct Lexicon {
         return result
     }
 
-    static func ensureFileExists() {
-        guard !FileManager.default.fileExists(atPath: fileURL.path) else { return }
+    static func ensureFileExists(at url: URL = fileURL) {
+        guard !FileManager.default.fileExists(atPath: url.path) else { return }
         let example = """
         {
           "vocabulary": ["MyWhisper", "whisper.cpp"],
           "replacements": [{"find": "my whisper", "replace": "MyWhisper"}]
         }
         """
-        try? example.write(to: fileURL, atomically: true, encoding: .utf8)
+        try? example.write(to: url, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 
     /// Appends a user-derived find→replace rule to `url`'s replacements,

@@ -48,6 +48,7 @@ enum AppProfileStore {
         ]
         """
         try? example.write(to: url, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 
     /// Returns the first rule (in array order) whose `bundleId` matches the

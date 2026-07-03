@@ -48,6 +48,7 @@ struct ModeStore {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(defaultModes) else { return }
         try? data.write(to: url, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 }
 
@@ -216,10 +217,14 @@ enum Ollama {
             throw ResponseError(message: "Ollama returned an error while pulling \(name)")
         }
 
+        var sawSuccess = false
         for try await line in byteStream.lines {
             guard let parsed = parsePullProgressLine(Data(line.utf8)) else { continue }
             if parsed.status.hasPrefix("error:") {
                 throw ResponseError(message: String(parsed.status.dropFirst("error: ".count)))
+            }
+            if parsed.status == "success" {
+                sawSuccess = true
             }
             let status = parsed.status
             let completed = parsed.completed
@@ -227,6 +232,11 @@ enum Ollama {
             await MainActor.run {
                 progress(status, completed, total)
             }
+        }
+
+        guard sawSuccess else {
+            throw ResponseError(
+                message: "model pull ended without confirming success — check Ollama and retry")
         }
     }
 

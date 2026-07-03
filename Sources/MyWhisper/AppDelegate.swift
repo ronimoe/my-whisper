@@ -260,10 +260,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let engine else { return }
         previewInFlight = true
         let snapshot = recorder.snapshotSamples(maxSamples: Self.previewWindowSamples)
-        let language = Settings.shared.language
-        let translate = Settings.shared.translateToEnglish
+        // Resolve the SAME EffectiveDictation finishDictation will use (same
+        // activeProfile, captured once at beginDictation) so the live preview
+        // — and any partial it produces for fast-finalize reuse — is
+        // transcribed under the language/translate that will actually apply
+        // to this app, not the unconditional base Settings.
+        let eff = EffectiveDictation.resolve(language: Settings.shared.language,
+                                             modeName: Settings.shared.currentModeName,
+                                             spokenPunctuation: Settings.shared.spokenPunctuationEnabled,
+                                             translate: Settings.shared.translateToEnglish,
+                                             profile: activeProfile)
+        let translate = eff.translate
         let lexicon = Lexicon.load()
-        let params = CodeSwitch.requestParameters(language: language,
+        let params = CodeSwitch.requestParameters(language: eff.language,
                                                    primary: Settings.shared.mixedPrimary,
                                                    vocabularyPrompt: lexicon.vocabularyPrompt)
         previewTask = Task {
@@ -282,7 +291,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     // saw, so fast finalize must not fire.
                     if sampleCountAtRequest <= Self.previewWindowSamples {
                         self.lastPartial = FastFinalize.Partial(sampleCount: sampleCountAtRequest,
-                                                                rawText: raw)
+                                                                rawText: raw,
+                                                                language: eff.language,
+                                                                translate: eff.translate)
                     } else {
                         self.lastPartial = nil
                     }
@@ -323,7 +334,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let tailRMS = FastFinalize.tailRMS(samples, from: partial?.sampleCount ?? 0)
         let reuse = Settings.shared.fastFinalizeEnabled &&
-            FastFinalize.shouldReuse(partial: partial, totalSamples: samples.count, tailRMS: tailRMS)
+            FastFinalize.shouldReuse(partial: partial, totalSamples: samples.count, tailRMS: tailRMS,
+                                     expectedLanguage: eff.language, expectedTranslate: eff.translate)
 
         Task {
             do {

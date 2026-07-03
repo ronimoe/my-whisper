@@ -102,6 +102,14 @@ final class AppProfileStoreTests: XCTestCase {
         XCTAssertEqual(profiles.map(\.app), ["Custom"])
     }
 
+    func testEnsureFileExistsWritesFileWithOwnerOnlyPerms() {
+        let url = tempDir.appendingPathComponent("profiles.json")
+        AppProfileStore.ensureFileExists(at: url)
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let perms = attributes?[.posixPermissions] as? NSNumber
+        XCTAssertEqual(perms?.uint16Value, 0o600)
+    }
+
     // MARK: - match
 
     func testMatchByAppNameCaseInsensitive() {

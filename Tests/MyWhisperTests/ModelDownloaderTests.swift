@@ -36,4 +36,41 @@ final class ModelDownloaderTests: XCTestCase {
         // report not-downloading.
         XCTAssertFalse(ModelDownloader.shared.isDownloading)
     }
+
+    // MARK: - validateSize
+
+    func testMatchingSizesAreOK() {
+        XCTAssertNil(ModelDownloader.validateSize(actual: 5_000_000, expected: 5_000_000))
+    }
+
+    func testExpectedNilAndActualAtLeast1MBIsOK() {
+        XCTAssertNil(ModelDownloader.validateSize(actual: 1_048_576, expected: nil))
+        XCTAssertNil(ModelDownloader.validateSize(actual: 5_000_000, expected: nil))
+    }
+
+    func testMismatchReturnsMessage() {
+        let message = ModelDownloader.validateSize(actual: 4_999_999, expected: 5_000_000)
+        XCTAssertNotNil(message)
+    }
+
+    func testUnder1MBReturnsMessageEvenWhenExpectedMatches() {
+        let tiny: Int64 = 500_000
+        let message = ModelDownloader.validateSize(actual: tiny, expected: tiny)
+        XCTAssertNotNil(message)
+    }
+
+    func testUnder1MBWithNilExpectedReturnsMessage() {
+        let message = ModelDownloader.validateSize(actual: 999_999, expected: nil)
+        XCTAssertNotNil(message)
+    }
+
+    func testExactly1MBWithNilExpectedIsOK() {
+        XCTAssertNil(ModelDownloader.validateSize(actual: 1_048_576, expected: nil))
+    }
+
+    func testExpectedZeroOrLessIsTreatedLikeUnknownExpected() {
+        // expected <= 0 means "no usable Content-Length" — only the 1MB floor applies.
+        XCTAssertNil(ModelDownloader.validateSize(actual: 5_000_000, expected: 0))
+        XCTAssertNotNil(ModelDownloader.validateSize(actual: 500_000, expected: 0))
+    }
 }
