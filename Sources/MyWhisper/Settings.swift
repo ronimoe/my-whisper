@@ -29,6 +29,7 @@ final class Settings {
         case ollamaModel
         case ollamaBaseURL
         case hasCompletedOnboarding
+        case fastFinalizeEnabled
     }
 
     /// Restricts a directory (which may already exist from before this
@@ -182,6 +183,15 @@ final class Settings {
     var hasCompletedOnboarding: Bool {
         get { defaults.object(forKey: Key.hasCompletedOnboarding.rawValue) as? Bool ?? false }
         set { defaults.set(newValue, forKey: Key.hasCompletedOnboarding.rawValue) }
+    }
+
+    /// Reuse the live preview's last partial transcript as the final
+    /// transcript when it already covers the recording (short, silent tail
+    /// since the partial was taken), skipping full re-transcription so paste
+    /// is instant. Default on.
+    var fastFinalizeEnabled: Bool {
+        get { defaults.object(forKey: Key.fastFinalizeEnabled.rawValue) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.fastFinalizeEnabled.rawValue) }
     }
 
     func availableModels() -> [URL] {

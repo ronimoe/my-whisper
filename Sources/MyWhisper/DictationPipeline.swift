@@ -79,9 +79,42 @@ struct DictationPipeline {
         let raw = try await engine.transcribe(samples: samples, language: params.language,
                                               translate: translate, prompt: params.prompt)
 
-        let outcome = Self.process(rawTranscript: raw, lexicon: lexicon,
-                                   voiceCommandsEnabled: voiceCommandsEnabled,
-                                   spokenPunctuationEnabled: spokenPunctuationEnabled)
+        return await Self.finishFromRawTranscript(
+            raw, lexicon: lexicon, voiceCommandsEnabled: voiceCommandsEnabled,
+            spokenPunctuationEnabled: spokenPunctuationEnabled,
+            modeName: modeName, modes: modes, context: context,
+            ollamaModel: ollamaModel, ollamaBaseURL: ollamaBaseURL)
+    }
+
+    /// Same post-transcription pipeline as `run(samples:...)`, but starting
+    /// from an already-transcribed raw string instead of audio — no engine
+    /// call, no network for transcription. Used by fast-finalize, which
+    /// reuses a live-preview partial's raw transcript instead of
+    /// re-transcribing the full recording. Static because this path never
+    /// touches `engine`.
+    static func run(rawTranscript: String, lexicon: Lexicon, voiceCommandsEnabled: Bool,
+                    spokenPunctuationEnabled: Bool, modeName: String, modes: [Mode],
+                    context: ModeContext.Captured?, ollamaModel: String,
+                    ollamaBaseURL: URL) async -> DictationResult {
+        await finishFromRawTranscript(
+            rawTranscript, lexicon: lexicon, voiceCommandsEnabled: voiceCommandsEnabled,
+            spokenPunctuationEnabled: spokenPunctuationEnabled,
+            modeName: modeName, modes: modes, context: context,
+            ollamaModel: ollamaModel, ollamaBaseURL: ollamaBaseURL)
+    }
+
+    /// Shared tail of both `run` entry points: `process` the raw transcript,
+    /// then — for `.text` results in a non-Raw mode — rewrite via Ollama
+    /// (falling back to the raw text on failure). Factored out so the
+    /// audio-driven and raw-transcript-driven entry points cannot drift.
+    private static func finishFromRawTranscript(
+        _ raw: String, lexicon: Lexicon, voiceCommandsEnabled: Bool,
+        spokenPunctuationEnabled: Bool, modeName: String, modes: [Mode],
+        context: ModeContext.Captured?, ollamaModel: String, ollamaBaseURL: URL
+    ) async -> DictationResult {
+        let outcome = process(rawTranscript: raw, lexicon: lexicon,
+                              voiceCommandsEnabled: voiceCommandsEnabled,
+                              spokenPunctuationEnabled: spokenPunctuationEnabled)
 
         guard case .text(let candidate) = outcome else {
             return DictationResult(outcome: outcome, aiFailure: nil)

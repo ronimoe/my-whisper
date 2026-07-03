@@ -24,6 +24,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var translateCheckbox: NSButton!
     private var launchAtLoginCheckbox: NSButton!
     private var saveHistoryCheckbox: NSButton!
+    private var fastFinalizeCheckbox: NSButton!
 
     private var languagePopup: NSPopUpButton!
     private var modelPopup: NSPopUpButton!
@@ -137,10 +138,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         launchAtLoginCheckbox.isEnabled = Bundle.main.bundleURL.pathExtension == "app"
         saveHistoryCheckbox = NSButton(checkboxWithTitle: "Save history", target: self,
                                        action: #selector(toggleSaveHistory))
+        fastFinalizeCheckbox = NSButton(checkboxWithTitle: "Instant paste (reuse live preview)",
+                                        target: self, action: #selector(toggleFastFinalize))
 
         for checkbox in [soundCuesCheckbox, autoStopCheckbox, voiceCommandsCheckbox,
                          spokenPunctuationCheckbox, livePreviewCheckbox, translateCheckbox,
-                         launchAtLoginCheckbox, saveHistoryCheckbox] {
+                         launchAtLoginCheckbox, saveHistoryCheckbox, fastFinalizeCheckbox] {
             stack.addArrangedSubview(checkbox!)
         }
         return stack
@@ -254,6 +257,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         launchAtLoginCheckbox.state = SMAppService.mainApp.status == .enabled ? .on : .off
         launchAtLoginCheckbox.isEnabled = Bundle.main.bundleURL.pathExtension == "app"
         saveHistoryCheckbox.state = Settings.shared.historyEnabled ? .on : .off
+        fastFinalizeCheckbox.state = Settings.shared.fastFinalizeEnabled ? .on : .off
 
         refreshLanguagePopup()
         refreshModelPopup()
@@ -339,6 +343,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     @objc private func toggleSaveHistory() {
         Settings.shared.historyEnabled = saveHistoryCheckbox.state == .on
+    }
+
+    @objc private func toggleFastFinalize() {
+        Settings.shared.fastFinalizeEnabled = fastFinalizeCheckbox.state == .on
     }
 
     @objc private func toggleLaunchAtLogin() {

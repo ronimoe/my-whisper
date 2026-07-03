@@ -16,6 +16,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// the result (or error) is handled, so a hotkey/menu press mid-transcribe
     /// can't start a second, overlapping recording.
     private var isTranscribing = false
+    /// The most recently completed live-preview partial, bound to the sample
+    /// count the recording had when that partial was requested. Only ever
+    /// set when the snapshot covered the FULL recording so far (i.e. the
+    /// recording hadn't exceeded the preview window yet) — see previewTick.
+    /// Cleared on every begin/cancel and consumed (cleared) by finishDictation.
+    private var lastPartial: FastFinalize.Partial?
+
+    /// Samples above this, the 30s preview window (snapshotSamples' cap) no
+    /// longer covers the full recording, so a partial taken at/after this
+    /// point cannot be trusted to stand in for the whole thing.
+    private static let previewWindowSamples = 30 * 16000
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusController.onToggleDictation = { [weak self] in self?.toggleDictation() }
@@ -181,6 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         _ = engine
         dictationContext = ModeContext.capture()
+        lastPartial = nil
         do {
             recorder.autoStopEnabled = Settings.shared.autoStopEnabled
             try recorder.start()
@@ -218,11 +230,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func previewTick() {
         guard recorder.isRecording else { return }
         let now = Date().timeIntervalSinceReferenceDate
-        guard previewScheduler.shouldFire(now: now, samplesAvailable: recorder.sampleCount,
+        let sampleCountAtRequest = recorder.sampleCount
+        guard previewScheduler.shouldFire(now: now, samplesAvailable: sampleCountAtRequest,
                                           inFlight: previewInFlight) else { return }
         guard let engine else { return }
         previewInFlight = true
-        let snapshot = recorder.snapshotSamples(maxSamples: 30 * 16000)
+        let snapshot = recorder.snapshotSamples(maxSamples: Self.previewWindowSamples)
         let language = Settings.shared.language
         let translate = Settings.shared.translateToEnglish
         let lexicon = Lexicon.load()
@@ -238,6 +251,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.previewInFlight = false
                 guard !Task.isCancelled else { return }
                 if self.recorder.isRecording, let raw {
+                    // Only trust this partial as a stand-in for the full
+                    // recording when the snapshot wasn't truncated by the
+                    // preview window, i.e. it covered everything captured
+                    // so far. Otherwise there's audio this partial never
+                    // saw, so fast finalize must not fire.
+                    if sampleCountAtRequest <= Self.previewWindowSamples {
+                        self.lastPartial = FastFinalize.Partial(sampleCount: sampleCountAtRequest,
+                                                                rawText: raw)
+                    } else {
+                        self.lastPartial = nil
+                    }
                     let text = Postprocess.clean(raw)
                     if !text.isEmpty {
                         RecordingPill.shared.update(text: text)
@@ -252,6 +276,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         RecordingPill.shared.hide()
         hotKeys.unregisterSecondary()
         let samples = recorder.stop()
+        let partial = lastPartial
+        lastPartial = nil
         if Settings.shared.soundCues { NSSound(named: "Tink")?.play() }
         guard samples.count > 3200 else { // ignore recordings under 0.2 s
             statusController.setStatus(.idle)
@@ -266,18 +292,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let context = dictationContext
         let pipeline = DictationPipeline(engine: engine)
 
+        let tailRMS = FastFinalize.tailRMS(samples, from: partial?.sampleCount ?? 0)
+        let reuse = Settings.shared.fastFinalizeEnabled &&
+            FastFinalize.shouldReuse(partial: partial, totalSamples: samples.count, tailRMS: tailRMS)
+
         Task {
             do {
-                let result = try await pipeline.run(
-                    samples: samples, language: language,
-                    mixedPrimary: Settings.shared.mixedPrimary, translate: translate,
-                    lexicon: lexicon,
-                    voiceCommandsEnabled: Settings.shared.voiceCommandsEnabled,
-                    spokenPunctuationEnabled: Settings.shared.spokenPunctuationEnabled,
-                    modeName: Settings.shared.currentModeName, modes: ModeStore.load(),
-                    context: context,
-                    ollamaModel: Settings.shared.ollamaModel,
-                    ollamaBaseURL: Settings.shared.ollamaBaseURL)
+                let result: DictationResult
+                if reuse, let partial {
+                    result = await DictationPipeline.run(
+                        rawTranscript: partial.rawText,
+                        lexicon: lexicon,
+                        voiceCommandsEnabled: Settings.shared.voiceCommandsEnabled,
+                        spokenPunctuationEnabled: Settings.shared.spokenPunctuationEnabled,
+                        modeName: Settings.shared.currentModeName, modes: ModeStore.load(),
+                        context: context,
+                        ollamaModel: Settings.shared.ollamaModel,
+                        ollamaBaseURL: Settings.shared.ollamaBaseURL)
+                } else {
+                    result = try await pipeline.run(
+                        samples: samples, language: language,
+                        mixedPrimary: Settings.shared.mixedPrimary, translate: translate,
+                        lexicon: lexicon,
+                        voiceCommandsEnabled: Settings.shared.voiceCommandsEnabled,
+                        spokenPunctuationEnabled: Settings.shared.spokenPunctuationEnabled,
+                        modeName: Settings.shared.currentModeName, modes: ModeStore.load(),
+                        context: context,
+                        ollamaModel: Settings.shared.ollamaModel,
+                        ollamaBaseURL: Settings.shared.ollamaBaseURL)
+                }
 
                 if let aiFailure = result.aiFailure {
                     await MainActor.run {
@@ -334,6 +377,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard recorder.isRecording else { return }
         stopPreviewTimer()
         _ = recorder.stop()
+        lastPartial = nil
         if Settings.shared.soundCues { NSSound(named: "Basso")?.play() }
         RecordingPill.shared.hide()
         hotKeys.unregisterSecondary()

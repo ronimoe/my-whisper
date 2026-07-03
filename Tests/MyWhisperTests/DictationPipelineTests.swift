@@ -174,4 +174,23 @@ final class DictationPipelineTests: XCTestCase {
                                                 spokenPunctuationEnabled: false)
         XCTAssertEqual(outcome, .empty)
     }
+
+    // MARK: - run(rawTranscript:) — fast-finalize entry point
+
+    /// Pure: no engine, no network. With mode "Raw", the raw transcript flows
+    /// through the same clean/lexicon/command/punctuation path as
+    /// `process`, and skips Ollama entirely.
+    func testRunFromRawTranscriptWithRawModeReturnsProcessedText() async {
+        let result = await DictationPipeline.run(
+            rawTranscript: "  hello   world  ",
+            lexicon: emptyLexicon(),
+            voiceCommandsEnabled: true,
+            spokenPunctuationEnabled: false,
+            modeName: "Raw", modes: [],
+            context: nil,
+            ollamaModel: "llama3.2",
+            ollamaBaseURL: URL(string: "http://127.0.0.1:11434")!)
+        XCTAssertEqual(result.outcome, .text("hello world"))
+        XCTAssertNil(result.aiFailure)
+    }
 }
