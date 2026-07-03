@@ -5,10 +5,48 @@ import Foundation
 final class WhisperServerManager: TranscriptionEngine {
     typealias State = EngineState
 
-    private(set) var state: State = .stopped {
-        didSet { onStateChange?(state) }
+    /// Guards `_state` so the enum-with-String payload is never read or written
+    /// concurrently by the main thread, the poll queue, and the Process
+    /// termination thread. See `state`/`setState`/`transition` below.
+    private let stateLock = NSLock()
+    private var _state: State = .stopped
+    var state: State {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return _state
     }
     var onStateChange: ((State) -> Void)?
+
+    /// Single synchronized writer: commits `newValue` to `_state` under the lock,
+    /// captures the callback, then fires `onStateChange` OUTSIDE the lock so a
+    /// callback that reads `state` cannot deadlock and callbacks are never
+    /// delivered while the lock is held.
+    private func setState(_ newValue: State) {
+        stateLock.lock()
+        _state = newValue
+        let callback = onStateChange
+        stateLock.unlock()
+        callback?(newValue)
+    }
+
+    /// Compare-and-set: atomically applies `newValue` only if `predicate` holds
+    /// for the current state, evaluated under the same lock as the write. Returns
+    /// whether the transition happened. `onStateChange` fires outside the lock.
+    /// A late writer (e.g. the termination handler) can therefore not resurrect a
+    /// state that `stop()` already moved to `.stopped`.
+    @discardableResult
+    func transition(to newValue: State, onlyIf predicate: (State) -> Bool) -> Bool {
+        stateLock.lock()
+        guard predicate(_state) else {
+            stateLock.unlock()
+            return false
+        }
+        _state = newValue
+        let callback = onStateChange
+        stateLock.unlock()
+        callback?(newValue)
+        return true
+    }
 
     let modelURL: URL
     private let serverBinary: URL
@@ -46,7 +84,7 @@ final class WhisperServerManager: TranscriptionEngine {
 
     func start() {
         guard process == nil else { return }
-        state = .starting
+        setState(.starting)
 
         let proc = Process()
         proc.executableURL = serverBinary
@@ -63,14 +101,20 @@ final class WhisperServerManager: TranscriptionEngine {
         }
         proc.terminationHandler = { [weak self] finished in
             guard let self else { return }
-            if case .stopped = self.state { return }
-            self.state = .failed(
-                "whisper-server exited (code \(finished.terminationStatus)). \(self.logTail())")
+            // Only report a crash if stop() hasn't already claimed teardown; the
+            // check + write are atomic under stateLock, so a stop() racing here
+            // cannot be overwritten with .failed.
+            let message =
+                "whisper-server exited (code \(finished.terminationStatus)). \(self.logTail())"
+            self.transition(to: .failed(message)) { current in
+                if case .stopped = current { return false }
+                return true
+            }
         }
         do {
             try proc.run()
         } catch {
-            state = .failed("Could not launch whisper-server: \(error.localizedDescription)")
+            setState(.failed("Could not launch whisper-server: \(error.localizedDescription)"))
             return
         }
         process = proc
@@ -78,7 +122,8 @@ final class WhisperServerManager: TranscriptionEngine {
     }
 
     func stop() {
-        state = .stopped
+        // Authoritative teardown: unconditionally set .stopped under the lock.
+        setState(.stopped)
         process?.terminate()
         process = nil
     }
@@ -90,13 +135,22 @@ final class WhisperServerManager: TranscriptionEngine {
                 guard let self else { return }
                 guard case .starting = self.state else { return }
                 if self.ping() {
-                    self.state = .ready
+                    // Only promote to .ready if still .starting — a stop() or a
+                    // termination-handler .failed that landed since the ping must
+                    // win. The check + write are atomic under stateLock.
+                    self.transition(to: .ready) { current in
+                        if case .starting = current { return true }
+                        return false
+                    }
                     return
                 }
                 Thread.sleep(forTimeInterval: 0.5)
             }
-            if let self, case .starting = self.state {
-                self.state = .failed("Timed out waiting for whisper-server to load the model")
+            guard let self else { return }
+            self.transition(to: .failed("Timed out waiting for whisper-server to load the model")) {
+                current in
+                if case .starting = current { return true }
+                return false
             }
         }
     }

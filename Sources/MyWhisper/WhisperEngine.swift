@@ -6,10 +6,49 @@ import CWhisper
 /// subprocess over HTTP. The whisper context is not concurrency-safe, so all
 /// inference is serialized on a private queue.
 final class WhisperEngine: TranscriptionEngine {
-    private(set) var state: EngineState = .stopped {
-        didSet { onStateChange?(state) }
+    /// Guards `_state` so the enum-with-String payload is never read or written
+    /// concurrently by the main thread (start/stop) and the serial `queue` (the
+    /// load's terminal .ready/.failed write). Distinct from `contextLock`; the
+    /// two are never held nested — see `stop()`.
+    private let stateLock = NSLock()
+    private var _state: EngineState = .stopped
+    var state: EngineState {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return _state
     }
     var onStateChange: ((EngineState) -> Void)?
+
+    /// Single synchronized writer: commits `newValue` under the lock, captures the
+    /// callback, then fires `onStateChange` OUTSIDE the lock so a callback that
+    /// reads `state` cannot deadlock and callbacks are never delivered while the
+    /// lock is held.
+    private func setState(_ newValue: EngineState) {
+        stateLock.lock()
+        _state = newValue
+        let callback = onStateChange
+        stateLock.unlock()
+        callback?(newValue)
+    }
+
+    /// Compare-and-set: atomically applies `newValue` only if `predicate` holds
+    /// for the current state, evaluated under the same lock as the write. Returns
+    /// whether the transition happened. `onStateChange` fires outside the lock.
+    /// Lets a `stop()` that already set `.stopped` win over the queue's terminal
+    /// `.ready`/`.failed` write.
+    @discardableResult
+    func transition(to newValue: EngineState, onlyIf predicate: (EngineState) -> Bool) -> Bool {
+        stateLock.lock()
+        guard predicate(_state) else {
+            stateLock.unlock()
+            return false
+        }
+        _state = newValue
+        let callback = onStateChange
+        stateLock.unlock()
+        callback?(newValue)
+        return true
+    }
 
     let modelURL: URL
 
@@ -44,7 +83,7 @@ final class WhisperEngine: TranscriptionEngine {
 
     func start() {
         guard case .stopped = state else { return }
-        state = .starting
+        setState(.starting)
         let path = modelURL.path
         queue.async { [weak self] in
             guard let self else { return }
@@ -52,13 +91,40 @@ final class WhisperEngine: TranscriptionEngine {
             params.use_gpu = true
             let ctx = path.withCString { whisper_init_from_file_with_params($0, params) }
             guard let ctx else {
-                self.state = .failed("could not load model \(self.modelURL.lastPathComponent)")
+                // Only report load failure if a stop() hasn't already claimed
+                // teardown; the check + write are atomic under stateLock.
+                self.transition(to: .failed("could not load model \(self.modelURL.lastPathComponent)")) {
+                    current in
+                    if case .starting = current { return true }
+                    return false
+                }
                 return
             }
+            // Publish the context first (as before), then promote to .ready only
+            // if still .starting. If a stop() already set .stopped, the promotion
+            // is a no-op; because whisper_free runs on this same serial queue and
+            // stop() dispatched it after we return, we hand the pointer to stop()
+            // to free. stop() nulls context under contextLock and dispatches the
+            // free — so store under contextLock here to stay ordered with it.
             self.contextLock.lock()
             self.context = ctx
             self.contextLock.unlock()
-            self.state = .ready
+            let published = self.transition(to: .ready) { current in
+                if case .starting = current { return true }
+                return false
+            }
+            if !published {
+                // A concurrent stop() won the state race. It may have already
+                // taken the pointer (context == nil here) and dispatched the free,
+                // or it may have set .stopped before we stored context. Reclaim
+                // whatever is still ours and free it on this serial queue, which
+                // is the sole owner of the context.
+                self.contextLock.lock()
+                let leaked = self.context
+                self.context = nil
+                self.contextLock.unlock()
+                if let leaked { whisper_free(leaked) }
+            }
         }
     }
 
@@ -69,7 +135,11 @@ final class WhisperEngine: TranscriptionEngine {
         // serial queue finishes — the queue is the sole owner of the context, so
         // whisper_full never runs against a freed pointer. Nulling `context`
         // under the lock also makes a subsequent transcribe guard see nil.
-        state = .stopped
+        //
+        // The state write and the context free are two SEPARATE critical
+        // sections: stateLock (via setState) is released before contextLock is
+        // taken, so the two locks are never held nested and cannot deadlock.
+        setState(.stopped)
         contextLock.lock()
         let ctx = context
         context = nil
