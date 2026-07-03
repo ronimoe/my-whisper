@@ -117,7 +117,18 @@ Modes rewrite your dictation through an [Ollama](https://ollama.com) model on
 mode is **off by default** (mode *Raw*); nothing is sent anywhere until you
 pick a mode.
 
-**One-time Ollama setup:**
+**Easiest setup — no terminal needed:** menu bar → **Setup Assistant…** →
+**AI modes (optional)** section →
+
+1. **Get Ollama ↗** — opens ollama.com in your browser; install and launch
+   it as you would any other Mac app.
+2. Back in MyWhisper, the status updates automatically once Ollama is
+   running. Click **Download AI Model (~2 GB)** to pull a chat model — a
+   progress bar shows the download.
+3. Once it finishes: "✅ AI modes ready" — pick a mode from the menu bar
+   (e.g. *Email*).
+
+**Alternative — terminal/CLI (for developers):**
 
 ```sh
 brew install ollama          # or download from https://ollama.com
@@ -278,10 +289,11 @@ directory, 0600 files). Full details — and the honest limits of the
 
 ## Testing
 
-`make test` runs the XCTest suite — **192 tests** covering text cleanup, WAV
+`make test` runs the XCTest suite — **294 tests** covering text cleanup, WAV
 encode/decode, silence detection, the code-switch/punctuation/voice-command
-logic, lexicon, history store, AI-mode request building and identity parsing,
-the dictation pipeline, and engine state transitions. (Needs the full Xcode
+logic, lexicon, history store, AI-mode request building and identity parsing
+(including model listing and pull-progress parsing), the dictation pipeline,
+and engine state transitions. (Needs the full Xcode
 toolchain: `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`; the
 bare Command Line Tools lack XCTest.) The mic-capture and hotkey layers are
 OS-bound and covered by the end-to-end CLI path (`--transcribe`) plus manual

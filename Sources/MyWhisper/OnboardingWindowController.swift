@@ -34,6 +34,18 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     private var tryItTextView: NSTextView!
     private var engineStatusLabel: NSTextField!
 
+    // AI modes section
+    private var aiModesStatusLabel: NSTextField!
+    private var aiModesGetOllamaButton: NSButton!
+    private var aiModesDownloadButton: NSButton!
+    private var aiModesProgressBar: NSProgressIndicator!
+    private var aiModesByteLabel: NSTextField!
+    private var aiModesErrorLabel: NSTextField!
+    private var aiModesProbeInFlight = false
+    private var aiModesPullInFlight = false
+    private var aiModesTickCount = 0
+    private enum AIModesState { case unreachable, needsModel(String), ready(String) }
+
     private static let byteFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
@@ -47,6 +59,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         if window == nil { buildWindow() }
         refreshPermissions()
         refreshModelSection()
+        refreshAIModesSection()
         NSApp.activate(ignoringOtherApps: true)
         window?.center()
         window?.makeKeyAndOrderFront(nil)
@@ -82,6 +95,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
         stack.addArrangedSubview(boxed(title: "Permissions", content: buildPermissionsSection()))
         stack.addArrangedSubview(boxed(title: "Speech model", content: buildModelSection()))
+        stack.addArrangedSubview(boxed(title: "AI modes (optional)", content: buildAIModesSection()))
         stack.addArrangedSubview(boxed(title: "Try it", content: buildTryItSection()))
         stack.addArrangedSubview(buildFooter())
 
@@ -309,6 +323,168 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         ModelDownloader.shared.cancel()
     }
 
+    // MARK: - Section 2b: AI modes (optional)
+
+    private func buildAIModesSection() -> NSView {
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 8
+
+        let explainer = NSTextField(labelWithString:
+            "Rewrite dictation as emails or messages using a local AI (Ollama). "
+                + "Optional — everything else works without it. Stays 100% on your Mac.")
+        explainer.lineBreakMode = .byWordWrapping
+        explainer.maximumNumberOfLines = 0
+        explainer.preferredMaxLayoutWidth = 440
+        explainer.textColor = .secondaryLabelColor
+
+        aiModesStatusLabel = NSTextField(labelWithString: "")
+        aiModesStatusLabel.lineBreakMode = .byWordWrapping
+        aiModesStatusLabel.maximumNumberOfLines = 0
+        aiModesStatusLabel.preferredMaxLayoutWidth = 440
+
+        let buttonRow = NSStackView()
+        buttonRow.orientation = .horizontal
+        buttonRow.spacing = 8
+        aiModesGetOllamaButton = NSButton(title: "Get Ollama \u{2197}", target: self,
+                                          action: #selector(openOllamaDownloadPage))
+        aiModesGetOllamaButton.bezelStyle = .rounded
+        aiModesDownloadButton = NSButton(title: "Download AI Model (~2 GB)", target: self,
+                                         action: #selector(startAIModelDownload))
+        aiModesDownloadButton.bezelStyle = .rounded
+        buttonRow.addArrangedSubview(aiModesGetOllamaButton)
+        buttonRow.addArrangedSubview(aiModesDownloadButton)
+
+        aiModesProgressBar = NSProgressIndicator()
+        aiModesProgressBar.style = .bar
+        aiModesProgressBar.isIndeterminate = false
+        aiModesProgressBar.minValue = 0
+        aiModesProgressBar.maxValue = 1
+        aiModesProgressBar.widthAnchor.constraint(equalToConstant: 440).isActive = true
+
+        aiModesByteLabel = NSTextField(labelWithString: "")
+        aiModesErrorLabel = NSTextField(labelWithString: "")
+        aiModesErrorLabel.textColor = .systemRed
+        aiModesErrorLabel.lineBreakMode = .byWordWrapping
+        aiModesErrorLabel.maximumNumberOfLines = 0
+        aiModesErrorLabel.preferredMaxLayoutWidth = 440
+
+        stack.addArrangedSubview(explainer)
+        stack.addArrangedSubview(aiModesStatusLabel)
+        stack.addArrangedSubview(buttonRow)
+        stack.addArrangedSubview(aiModesProgressBar)
+        stack.addArrangedSubview(aiModesByteLabel)
+        stack.addArrangedSubview(aiModesErrorLabel)
+        return stack
+    }
+
+    /// Re-probes Ollama's reachability and, if reachable, whether the
+    /// configured chat model is present, then updates the UI. Never runs
+    /// concurrently with another probe or an in-flight pull.
+    private func refreshAIModesSection() {
+        guard !aiModesProbeInFlight, !aiModesPullInFlight else { return }
+        aiModesProbeInFlight = true
+        let baseURL = Settings.shared.ollamaBaseURL
+        let wantedModel = Settings.shared.ollamaModel
+
+        Task { [weak self] in
+            guard let self else { return }
+            let reachable = await Ollama.probeIsOllama(baseURL: baseURL)
+            let state: AIModesState
+            if reachable {
+                let names = await Ollama.listModelNames(baseURL: baseURL) ?? []
+                let hasModel = names.contains { $0 == wantedModel || $0.hasPrefix(wantedModel) }
+                state = hasModel ? .ready(wantedModel) : .needsModel(wantedModel)
+            } else {
+                state = .unreachable
+            }
+            await MainActor.run {
+                self.aiModesProbeInFlight = false
+                self.applyAIModesState(state)
+            }
+        }
+    }
+
+    private func applyAIModesState(_ state: AIModesState) {
+        guard !aiModesPullInFlight else { return }
+        aiModesErrorLabel.stringValue = ""
+        switch state {
+        case .unreachable:
+            aiModesStatusLabel.stringValue = "\u{25CB} Ollama not installed (or not running)"
+            aiModesGetOllamaButton.isHidden = false
+            aiModesDownloadButton.isHidden = true
+            aiModesProgressBar.isHidden = true
+            aiModesByteLabel.isHidden = true
+        case .needsModel:
+            aiModesStatusLabel.stringValue = "\u{25D0} Ollama is running \u{2014} needs an AI model"
+            aiModesGetOllamaButton.isHidden = true
+            aiModesDownloadButton.isHidden = false
+            aiModesProgressBar.isHidden = true
+            aiModesByteLabel.isHidden = true
+        case .ready(let model):
+            aiModesStatusLabel.stringValue =
+                "\u{2705} AI modes ready (\(model)) \u{2014} pick a mode from the menu bar (e.g. Email)."
+            aiModesGetOllamaButton.isHidden = true
+            aiModesDownloadButton.isHidden = true
+            aiModesProgressBar.isHidden = true
+            aiModesByteLabel.isHidden = true
+        }
+    }
+
+    @objc private func openOllamaDownloadPage() {
+        // Opens in the user's default browser — the app itself never fetches
+        // this URL. Once the user installs/launches Ollama, the periodic
+        // probe (startTimer) picks it up automatically.
+        NSWorkspace.shared.open(URL(string: "https://ollama.com/download")!)
+    }
+
+    @objc private func startAIModelDownload() {
+        let model = Settings.shared.ollamaModel
+        let baseURL = Settings.shared.ollamaBaseURL
+
+        aiModesPullInFlight = true
+        aiModesErrorLabel.stringValue = ""
+        aiModesDownloadButton.isEnabled = false
+        aiModesProgressBar.isHidden = false
+        aiModesProgressBar.doubleValue = 0
+        aiModesByteLabel.isHidden = false
+        aiModesByteLabel.stringValue = ""
+        aiModesStatusLabel.stringValue = "Downloading \(model)\u{2026}"
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await Ollama.pullModel(name: model, baseURL: baseURL) { status, completed, total in
+                    MainActor.assumeIsolated {
+                        if let completed, let total, total > 0 {
+                            self.aiModesProgressBar.doubleValue = Double(completed) / Double(total)
+                            let writtenString = Self.byteFormatter.string(fromByteCount: completed)
+                            let totalString = Self.byteFormatter.string(fromByteCount: total)
+                            self.aiModesByteLabel.stringValue = "\(writtenString) of \(totalString) \u{2014} \(status)"
+                        } else {
+                            self.aiModesByteLabel.stringValue = status
+                        }
+                    }
+                }
+                await MainActor.run {
+                    self.aiModesPullInFlight = false
+                    self.aiModesDownloadButton.isEnabled = true
+                    self.refreshAIModesSection()
+                }
+            } catch {
+                await MainActor.run {
+                    self.aiModesPullInFlight = false
+                    self.aiModesDownloadButton.isEnabled = true
+                    self.aiModesProgressBar.isHidden = true
+                    self.aiModesByteLabel.isHidden = true
+                    self.aiModesErrorLabel.stringValue = error.localizedDescription
+                    self.applyAIModesState(.needsModel(model))
+                }
+            }
+        }
+    }
+
     // MARK: - Section 3: Try it
 
     private func buildTryItSection() -> NSView {
@@ -380,8 +556,18 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     private func startTimer() {
         refreshTimer?.invalidate()
+        aiModesTickCount = 0
         let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.refreshPermissions()
+            guard let self else { return }
+            self.refreshPermissions()
+            // Rate-limit the AI-modes network probe to roughly every 3 ticks
+            // (~3 s) rather than every second — it's localhost and cheap, but
+            // there's no reason to hammer it on a 1 Hz UI timer.
+            self.aiModesTickCount += 1
+            if self.aiModesTickCount >= 3 {
+                self.aiModesTickCount = 0
+                self.refreshAIModesSection()
+            }
         }
         RunLoop.main.add(timer, forMode: .common)
         refreshTimer = timer
