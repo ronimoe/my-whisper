@@ -3,12 +3,12 @@ import Foundation
 /// User-editable vocabulary hints and text replacements, loaded fresh from
 /// `replacements.json` on each transcription so edits apply immediately.
 struct Lexicon {
-    struct Replacement: Decodable {
+    struct Replacement: Codable {
         let find: String
         let replace: String
     }
 
-    private struct File: Decodable {
+    private struct File: Codable {
         let vocabulary: [String]?
         let replacements: [Replacement]?
     }
@@ -87,5 +87,44 @@ struct Lexicon {
         }
         """
         try? example.write(to: fileURL, atomically: true, encoding: .utf8)
+    }
+
+    /// Appends a user-derived find→replace rule to `url`'s replacements,
+    /// preserving existing vocabulary and rules. A rule with the same find
+    /// (case-insensitive) is updated in place rather than duplicated. Missing
+    /// or malformed files are (re)created with just this one rule — data that
+    /// couldn't be read is treated as absent, not as a reason to drop the
+    /// user's correction. Writes pretty-printed JSON with 0600 perms, matching
+    /// HistoryStore's pattern. Returns false (and logs) on write failure; the
+    /// mtime cache used by `load()` invalidates automatically since the
+    /// file's modification date changes on write.
+    @discardableResult
+    static func appendReplacement(find: String, replace: String, to url: URL = fileURL) -> Bool {
+        var vocabulary: [String] = []
+        var replacements: [Replacement] = []
+        if let data = try? Data(contentsOf: url),
+           let file = try? JSONDecoder().decode(File.self, from: data) {
+            vocabulary = file.vocabulary ?? []
+            replacements = file.replacements ?? []
+        }
+
+        if let index = replacements.firstIndex(where: { $0.find.caseInsensitiveCompare(find) == .orderedSame }) {
+            replacements[index] = Replacement(find: find, replace: replace)
+        } else {
+            replacements.append(Replacement(find: find, replace: replace))
+        }
+
+        let file = File(vocabulary: vocabulary, replacements: replacements)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted]
+        do {
+            let data = try encoder.encode(file)
+            try data.write(to: url, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+            return true
+        } catch {
+            NSLog("MyWhisper: failed to save replacement: %@", error.localizedDescription)
+            return false
+        }
     }
 }

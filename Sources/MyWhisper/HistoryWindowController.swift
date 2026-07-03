@@ -8,6 +8,7 @@ final class HistoryWindowController: NSObject, NSWindowDelegate, NSTableViewData
     private var window: NSWindow?
     private var tableView: NSTableView!
     private var entries: [Entry] = []
+    private var correctButton: NSButton!
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -40,6 +41,13 @@ final class HistoryWindowController: NSObject, NSWindowDelegate, NSTableViewData
         clearButton.translatesAutoresizingMaskIntoConstraints = false
         clearButton.bezelStyle = .rounded
         contentView.addSubview(clearButton)
+
+        let correctButton = NSButton(title: "Correct…", target: self, action: #selector(correctSelected))
+        correctButton.translatesAutoresizingMaskIntoConstraints = false
+        correctButton.bezelStyle = .rounded
+        correctButton.isEnabled = false
+        contentView.addSubview(correctButton)
+        self.correctButton = correctButton
 
         let scrollView = NSScrollView()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -79,6 +87,9 @@ final class HistoryWindowController: NSObject, NSWindowDelegate, NSTableViewData
 
             clearButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
             clearButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+
+            correctButton.leadingAnchor.constraint(equalTo: clearButton.trailingAnchor, constant: 8),
+            correctButton.centerYAnchor.constraint(equalTo: clearButton.centerYAnchor),
         ])
 
         w.contentView = contentView
@@ -88,6 +99,7 @@ final class HistoryWindowController: NSObject, NSWindowDelegate, NSTableViewData
     private func reload() {
         entries = HistoryStore.shared.load().reversed()
         tableView?.reloadData()
+        correctButton?.isEnabled = false
     }
 
     @objc private func clearHistory() {
@@ -105,7 +117,59 @@ final class HistoryWindowController: NSObject, NSWindowDelegate, NSTableViewData
         Notifier.show(title: "Copied", body: preview)
     }
 
+    @objc private func correctSelected() {
+        let row = tableView.selectedRow
+        guard row >= 0, row < entries.count, let window else { return }
+        let original = entries[row].text
+
+        let alert = NSAlert()
+        alert.messageText = "Correct Transcription"
+        alert.informativeText = "Edit the text below. MyWhisper will try to learn a reusable fix from your change."
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 360, height: 72))
+        scrollView.hasVerticalScroller = true
+        scrollView.borderType = .bezelBorder
+
+        let textView = NSTextView(frame: scrollView.bounds)
+        textView.isEditable = true
+        textView.isRichText = false
+        textView.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        textView.string = original
+        textView.autoresizingMask = [.width, .height]
+
+        scrollView.documentView = textView
+        alert.accessoryView = scrollView
+        alert.window.initialFirstResponder = textView
+
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn else { return }
+            let corrected = textView.string
+            self?.applyCorrection(original: original, corrected: corrected)
+        }
+    }
+
+    private func applyCorrection(original: String, corrected: String) {
+        guard let rule = CorrectionDiff.suggestRule(original: original, corrected: corrected) else {
+            Notifier.show(title: "No reusable rule",
+                           body: "The edit couldn't be turned into a find-and-replace rule.")
+            return
+        }
+        guard Lexicon.appendReplacement(find: rule.find, replace: rule.replace) else {
+            Notifier.show(title: "Correction not saved",
+                           body: "Couldn't write the replacement rule to disk.")
+            return
+        }
+        Notifier.show(title: "Correction saved",
+                       body: "\"\(rule.find)\" → \"\(rule.replace)\" will be fixed automatically.")
+    }
+
     func windowWillClose(_ notification: Notification) {}
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        correctButton?.isEnabled = tableView.selectedRow >= 0
+    }
 
     // MARK: - NSTableViewDataSource
 

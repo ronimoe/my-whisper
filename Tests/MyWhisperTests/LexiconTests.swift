@@ -97,4 +97,91 @@ final class LexiconTests: XCTestCase {
         let second = Lexicon.load(from: url)
         XCTAssertEqual(second.vocabularyPrompt, "beta, gamma")
     }
+
+    // MARK: - appendReplacement
+
+    func testAppendToExistingFilePreservesVocabularyAndPriorRules() {
+        let url = write("""
+        {
+          "vocabulary": ["MyWhisper"],
+          "replacements": [{"find": "my whisper", "replace": "MyWhisper"}]
+        }
+        """)
+        let ok = Lexicon.appendReplacement(find: "klien", replace: "client", to: url)
+        XCTAssertTrue(ok)
+
+        let lexicon = Lexicon.load(from: url)
+        XCTAssertEqual(lexicon.vocabularyPrompt, "MyWhisper")
+        XCTAssertEqual(lexicon.apply(to: "MY WHISPER project klien besok"),
+                        "MyWhisper project client besok")
+    }
+
+    func testAppendToMissingFileCreatesItWithRule() {
+        let url = tempDir.appendingPathComponent("does-not-exist.json")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+
+        let ok = Lexicon.appendReplacement(find: "dek", replace: "deck", to: url)
+        XCTAssertTrue(ok)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+
+        let lexicon = Lexicon.load(from: url)
+        XCTAssertNil(lexicon.vocabularyPrompt)
+        XCTAssertEqual(lexicon.apply(to: "kirim dek sekarang"), "kirim deck sekarang")
+    }
+
+    func testAppendToMalformedFileRecreatesWithRule() {
+        let url = write("{ this is not valid json ")
+
+        let ok = Lexicon.appendReplacement(find: "wold", replace: "world", to: url)
+        XCTAssertTrue(ok)
+
+        let lexicon = Lexicon.load(from: url)
+        XCTAssertNil(lexicon.vocabularyPrompt)
+        XCTAssertEqual(lexicon.apply(to: "hello wold"), "hello world")
+    }
+
+    func testDuplicateFindCaseInsensitiveUpdatesInsteadOfDuplicating() {
+        let url = write("""
+        {
+          "vocabulary": [],
+          "replacements": [{"find": "klien", "replace": "client"}]
+        }
+        """)
+        let ok = Lexicon.appendReplacement(find: "KLIEN", replace: "customer", to: url)
+        XCTAssertTrue(ok)
+
+        guard let data = try? Data(contentsOf: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let replacements = json["replacements"] as? [[String: String]] else {
+            return XCTFail("expected valid replacements JSON")
+        }
+        XCTAssertEqual(replacements.count, 1)
+        XCTAssertEqual(replacements.first?["replace"], "customer")
+
+        let lexicon = Lexicon.load(from: url)
+        XCTAssertEqual(lexicon.apply(to: "the klien called"), "the customer called")
+    }
+
+    func testWrittenFilePermsAre0600() {
+        let url = tempDir.appendingPathComponent("perm-check.json")
+        let ok = Lexicon.appendReplacement(find: "a", replace: "b", to: url)
+        XCTAssertTrue(ok)
+
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let perms = attributes?[.posixPermissions] as? NSNumber
+        XCTAssertEqual(perms?.uint16Value, 0o600)
+    }
+
+    func testAppendedRuleRoundTripsThroughLoadAndApply() {
+        let url = write("""
+        {
+          "vocabulary": ["existing"],
+          "replacements": [{"find": "foo", "replace": "bar"}]
+        }
+        """)
+        XCTAssertTrue(Lexicon.appendReplacement(find: "baz", replace: "qux", to: url))
+
+        let lexicon = Lexicon.load(from: url)
+        XCTAssertEqual(lexicon.apply(to: "foo and baz"), "bar and qux")
+    }
 }
