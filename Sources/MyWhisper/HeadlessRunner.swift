@@ -50,7 +50,14 @@ final class HeadlessRunner {
         engine.start()
         ready.wait()
         if let startupError { return fail(startupError) }
-        defer { engine.stop() }
+        // stop() frees the context asynchronously on the engine's serial queue;
+        // the process exit()s right after run() returns, so drain that queue for
+        // the in-process engine to let ggml release its Metal resources before
+        // its static teardown asserts on them.
+        defer {
+            engine.stop()
+            (engine as? WhisperEngine)?.waitForPendingWork()
+        }
 
         guard let wav = FileManager.default.contents(atPath: wavPath) else {
             return fail("could not read \(wavPath)")

@@ -26,10 +26,15 @@ final class WhisperEngine: TranscriptionEngine {
     }
 
     deinit {
+        // Backstop only: AppDelegate calls stop() before releasing the engine,
+        // so context is normally already nil here. The serial queue is being
+        // torn down with self, so free the raw pointer directly rather than via
+        // an async closure that would capture self.
         contextLock.lock()
-        if let context { whisper_free(context) }
+        let ctx = context
         context = nil
         contextLock.unlock()
+        if let ctx { whisper_free(ctx) }
     }
 
     struct TranscriptionError: LocalizedError {
@@ -58,11 +63,28 @@ final class WhisperEngine: TranscriptionEngine {
     }
 
     func stop() {
+        // Flip state synchronously so no new work is accepted and the UI/poll
+        // sees .stopped immediately. Then serialize the free onto `queue` so it
+        // runs strictly after any in-flight or already-queued transcribe on that
+        // serial queue finishes — the queue is the sole owner of the context, so
+        // whisper_full never runs against a freed pointer. Nulling `context`
+        // under the lock also makes a subsequent transcribe guard see nil.
         state = .stopped
         contextLock.lock()
-        if let context { whisper_free(context) }
+        let ctx = context
         context = nil
         contextLock.unlock()
+        guard let ctx else { return } // never started, or already stopped
+        queue.async { whisper_free(ctx) }
+    }
+
+    /// Blocks until any queued work (including the free dispatched by `stop`)
+    /// has run. For headless callers that `exit()` right after stopping and
+    /// must let the context — and its Metal resources — be released before
+    /// ggml's static teardown runs. Never call from the main thread while an
+    /// inference may be in flight; it is a serial-queue barrier.
+    func waitForPendingWork() {
+        queue.sync {}
     }
 
     func transcribe(samples: [Float], language: String, translate: Bool,
