@@ -23,6 +23,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var livePreviewCheckbox: NSButton!
     private var translateCheckbox: NSButton!
     private var launchAtLoginCheckbox: NSButton!
+    private var saveHistoryCheckbox: NSButton!
 
     private var languagePopup: NSPopUpButton!
     private var modelPopup: NSPopUpButton!
@@ -134,10 +135,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         launchAtLoginCheckbox = NSButton(checkboxWithTitle: "Launch at login", target: self,
                                          action: #selector(toggleLaunchAtLogin))
         launchAtLoginCheckbox.isEnabled = Bundle.main.bundleURL.pathExtension == "app"
+        saveHistoryCheckbox = NSButton(checkboxWithTitle: "Save history", target: self,
+                                       action: #selector(toggleSaveHistory))
 
         for checkbox in [soundCuesCheckbox, autoStopCheckbox, voiceCommandsCheckbox,
                          spokenPunctuationCheckbox, livePreviewCheckbox, translateCheckbox,
-                         launchAtLoginCheckbox] {
+                         launchAtLoginCheckbox, saveHistoryCheckbox] {
             stack.addArrangedSubview(checkbox!)
         }
         return stack
@@ -241,6 +244,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         translateCheckbox.state = Settings.shared.translateToEnglish ? .on : .off
         launchAtLoginCheckbox.state = SMAppService.mainApp.status == .enabled ? .on : .off
         launchAtLoginCheckbox.isEnabled = Bundle.main.bundleURL.pathExtension == "app"
+        saveHistoryCheckbox.state = Settings.shared.historyEnabled ? .on : .off
 
         refreshLanguagePopup()
         refreshModelPopup()
@@ -322,6 +326,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     @objc private func toggleTranslate() {
         Settings.shared.translateToEnglish = translateCheckbox.state == .on
+    }
+
+    @objc private func toggleSaveHistory() {
+        Settings.shared.historyEnabled = saveHistoryCheckbox.state == .on
     }
 
     @objc private func toggleLaunchAtLogin() {

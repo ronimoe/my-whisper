@@ -170,6 +170,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         livePreviewItem.state = Settings.shared.livePreviewEnabled ? .on : .off
         menu.addItem(livePreviewItem)
 
+        let saveHistoryItem = NSMenuItem(title: "Save History", action: #selector(toggleSaveHistory), keyEquivalent: "")
+        saveHistoryItem.target = self
+        saveHistoryItem.state = Settings.shared.historyEnabled ? .on : .off
+        menu.addItem(saveHistoryItem)
+
         let translateItem = NSMenuItem(title: "Translate to English", action: #selector(toggleTranslate), keyEquivalent: "")
         translateItem.target = self
         translateItem.state = Settings.shared.translateToEnglish ? .on : .off
@@ -321,6 +326,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func toggleLivePreview() {
         Settings.shared.livePreviewEnabled.toggle()
+    }
+
+    @objc private func toggleSaveHistory() {
+        Settings.shared.historyEnabled.toggle()
     }
 
     @objc private func toggleLaunchAtLogin() {

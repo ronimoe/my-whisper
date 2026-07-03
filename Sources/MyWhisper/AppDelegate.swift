@@ -10,7 +10,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var previewTimer: Timer?
     private var previewScheduler = PartialScheduler()
     private var previewInFlight = false
+    private var previewTask: Task<Void, Never>?
     private var dictationContext = ModeContext.Captured(appName: nil, selection: nil)
+    /// True from the moment finishDictation commits to transcribing until
+    /// the result (or error) is handled, so a hotkey/menu press mid-transcribe
+    /// can't start a second, overlapping recording.
+    private var isTranscribing = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusController.onToggleDictation = { [weak self] in self?.toggleDictation() }
@@ -143,6 +148,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func beginDictation() {
+        guard !isTranscribing else {
+            Notifier.show(title: "Still transcribing", body: "Wait for the current dictation to finish.")
+            return
+        }
         guard let engine, case .ready = engine.state else {
             Notifier.show(title: "Model still loading", body: "Try again in a few seconds.")
             return
@@ -176,6 +185,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func stopPreviewTimer() {
         previewTimer?.invalidate()
         previewTimer = nil
+        previewTask?.cancel()
+        previewTask = nil
+        previewInFlight = false
         PreviewHUD.shared.hide()
     }
 
@@ -193,13 +205,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let params = CodeSwitch.requestParameters(language: language,
                                                    primary: Settings.shared.mixedPrimary,
                                                    vocabularyPrompt: lexicon.vocabularyPrompt)
-        Task {
+        previewTask = Task {
             let raw = try? await engine.transcribe(samples: snapshot,
                                                    language: params.language,
                                                    translate: translate,
                                                    prompt: params.prompt)
             await MainActor.run {
                 self.previewInFlight = false
+                guard !Task.isCancelled else { return }
                 if self.recorder.isRecording, let raw {
                     let text = Postprocess.clean(raw)
                     if !text.isEmpty {
@@ -220,6 +233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard let engine else { return }
         statusController.setStatus(.transcribing)
+        isTranscribing = true
         let language = Settings.shared.language
         let translate = Settings.shared.translateToEnglish
         let lexicon = Lexicon.load()
@@ -237,6 +251,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if Settings.shared.voiceCommandsEnabled, !candidate.isEmpty,
                    let command = VoiceCommands.match(candidate) {
                     await MainActor.run {
+                        self.isTranscribing = false
                         self.statusController.setStatus(.idle)
                         if !TextInserter.perform(command) {
                             Notifier.show(title: "Command needs Accessibility",
@@ -273,6 +288,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     text = candidate
                 }
                 await MainActor.run {
+                    self.isTranscribing = false
                     self.statusController.setStatus(.idle)
                     guard !text.isEmpty else { return }
                     let pasted = TextInserter.insert(text)
@@ -280,10 +296,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         Notifier.show(title: "Copied to clipboard",
                                       body: "Grant Accessibility permission to paste automatically.")
                     }
-                    HistoryStore.shared.append(text: text, language: language)
+                    if Settings.shared.historyEnabled {
+                        HistoryStore.shared.append(text: text, language: language)
+                    }
                 }
             } catch {
                 await MainActor.run {
+                    self.isTranscribing = false
                     self.statusController.setStatus(.error(error.localizedDescription))
                     Notifier.show(title: "Transcription failed", body: error.localizedDescription)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 4) {

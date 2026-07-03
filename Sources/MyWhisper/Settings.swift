@@ -4,16 +4,27 @@ final class Settings {
     static let shared = Settings()
     private let defaults = UserDefaults.standard
 
+    /// Restricts a directory (which may already exist from before this
+    /// change) to owner-only access, since it holds cleartext dictation
+    /// history, settings, and transcripts.
+    private static func lockDown(_ dir: URL) {
+        try? FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o700], ofItemAtPath: dir.path)
+    }
+
     static let appSupportDir: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let dir = base.appendingPathComponent("MyWhisper", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        lockDown(dir)
         return dir
     }()
 
     static var modelsDir: URL {
         let dir = appSupportDir.appendingPathComponent("models", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        lockDown(dir)
         return dir
     }
 
@@ -92,6 +103,13 @@ final class Settings {
     var voiceCommandsEnabled: Bool {
         get { defaults.object(forKey: "voiceCommandsEnabled") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "voiceCommandsEnabled") }
+    }
+
+    /// Persist each transcription to HistoryStore. Default on; turning this
+    /// off stops all writes to history.json.
+    var historyEnabled: Bool {
+        get { defaults.object(forKey: "historyEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "historyEnabled") }
     }
 
     /// Show a floating HUD with a live partial transcript while recording.

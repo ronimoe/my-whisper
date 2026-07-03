@@ -82,4 +82,26 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertEqual(entries[0].text, "persisted")
         XCTAssertEqual(entries[0].language, "id")
     }
+
+    func testPersistedFileHasOwnerOnlyPermissions() throws {
+        let store = HistoryStore(fileURL: tempURL)
+        store.append(text: "sensitive dictation", language: "en")
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: tempURL.path)
+        let permissions = attributes[.posixPermissions] as? Int
+        XCTAssertEqual(permissions, 0o600)
+    }
+
+    func testAppendReturnsTrueOnSuccessfulWrite() {
+        let store = HistoryStore(fileURL: tempURL)
+        XCTAssertTrue(store.append(text: "hello", language: "en"))
+    }
+
+    func testAppendReturnsFalseWhenDirectoryDoesNotExist() {
+        let missingDirURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("missing-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("history.json")
+        let store = HistoryStore(fileURL: missingDirURL)
+        XCTAssertFalse(store.append(text: "hello", language: "en"))
+    }
 }

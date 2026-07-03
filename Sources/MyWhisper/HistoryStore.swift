@@ -31,26 +31,41 @@ final class HistoryStore {
     }
 
     /// Appends a new entry with the current date, capping storage at
-    /// `maxEntries` by dropping the oldest entries first.
-    func append(text: String, language: String) {
+    /// `maxEntries` by dropping the oldest entries first. Returns false
+    /// (and logs) if the write failed; callers may ignore the result.
+    @discardableResult
+    func append(text: String, language: String) -> Bool {
         var entries = load()
         entries.append(Entry(date: Date(), text: text, language: language))
         if entries.count > Self.maxEntries {
             entries.removeFirst(entries.count - Self.maxEntries)
         }
-        persist(entries)
+        return persist(entries)
     }
 
     /// Empties the history file.
-    func clear() {
+    @discardableResult
+    func clear() -> Bool {
         persist([])
     }
 
-    private func persist(_ entries: [Entry]) {
+    /// Writes entries as owner-only-readable JSON (0600), since history.json
+    /// holds cleartext dictation. Returns false and logs a diagnostic on
+    /// failure instead of failing silently.
+    @discardableResult
+    private func persist(_ entries: [Entry]) -> Bool {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted]
-        guard let data = try? encoder.encode(entries) else { return }
-        try? data.write(to: fileURL, options: .atomic)
+        do {
+            let data = try encoder.encode(entries)
+            try data.write(to: fileURL, options: .atomic)
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+            return true
+        } catch {
+            NSLog("MyWhisper: failed to save history: %@", error.localizedDescription)
+            return false
+        }
     }
 }
