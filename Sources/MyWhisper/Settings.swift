@@ -120,6 +120,18 @@ final class Settings {
         set { defaults.set(newValue, forKey: "ollamaModel") }
     }
 
+    /// Base URL of the local Ollama server used for AI-mode rewriting.
+    /// Localhost by default; a malformed stored value falls back to the default
+    /// so we never silently point dictation text at a bogus endpoint.
+    var ollamaBaseURL: URL {
+        let fallback = URL(string: "http://127.0.0.1:11434")!
+        guard let stored = defaults.string(forKey: "ollamaBaseURL"),
+              let url = URL(string: stored) else {
+            return fallback
+        }
+        return url
+    }
+
     func availableModels() -> [URL] {
         let files = (try? FileManager.default.contentsOfDirectory(
             at: Self.modelsDir, includingPropertiesForKeys: nil)) ?? []

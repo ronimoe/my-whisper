@@ -89,7 +89,7 @@ final class HeadlessRunner {
                     do {
                         text = try await Ollama.rewrite(text: candidate, mode: mode,
                                                         defaultModel: Settings.shared.ollamaModel,
-                                                        baseURL: URL(string: "http://127.0.0.1:11434")!)
+                                                        baseURL: Settings.shared.ollamaBaseURL)
                     } catch {
                         errOut.write(Data("note: AI mode failed, printing raw text — \(error.localizedDescription)\n".utf8))
                         text = candidate

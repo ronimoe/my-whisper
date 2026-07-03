@@ -261,7 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                   model: mode.model)
                         text = try await Ollama.rewrite(text: candidate, mode: contextualMode,
                                                         defaultModel: Settings.shared.ollamaModel,
-                                                        baseURL: URL(string: "http://127.0.0.1:11434")!)
+                                                        baseURL: Settings.shared.ollamaBaseURL)
                     } catch {
                         await MainActor.run {
                             Notifier.show(title: "AI mode failed — pasted raw text",

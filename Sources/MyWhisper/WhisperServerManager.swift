@@ -82,8 +82,46 @@ final class WhisperServerManager: TranscriptionEngine {
         return candidates.first { fm.isExecutableFile(atPath: $0.path) }
     }
 
+    /// True if `port` is already bound on 127.0.0.1 by some other process.
+    /// Implemented as a POSIX bind probe: we attempt to bind the port and close
+    /// the probe socket immediately on success (so our spawned server can bind
+    /// it). A failure with EADDRINUSE means the port is taken.
+    static func isPortInUse(_ port: Int) -> Bool {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = in_port_t(UInt16(port)).bigEndian
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+
+        let bindResult = withUnsafePointer(to: &addr) { rawPtr in
+            rawPtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
+                bind(fd, sockPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        // bind() succeeded → nothing was listening; we release the socket via
+        // the defer above so the real server can claim the port.
+        if bindResult == 0 { return false }
+        return errno == EADDRINUSE
+    }
+
     func start() {
         guard process == nil else { return }
+
+        // Privacy gate: refuse to run if some OTHER process already owns the
+        // port. Otherwise the WAV we POST to /inference would go to whatever is
+        // squatting there. We probe by trying to bind 127.0.0.1:port ourselves;
+        // EADDRINUSE means it's taken. There's a tiny TOCTOU window between this
+        // check and the server's own bind — acceptable, and far safer than
+        // blindly adopting an unknown listener.
+        if Self.isPortInUse(port) {
+            setState(.failed("port \(port) is already in use by another process; "
+                + "refusing to send audio to it — quit the other process or change serverPort"))
+            return
+        }
+
         setState(.starting)
 
         let proc = Process()
@@ -155,6 +193,13 @@ final class WhisperServerManager: TranscriptionEngine {
         }
     }
 
+    /// Readiness probe. Confidence that we're talking to the right process comes
+    /// primarily from `start()`: we verified the port was free, then WE spawned
+    /// the server and hold its `Process` handle — nothing else could have claimed
+    /// the port in between (modulo the tiny TOCTOU window noted in `start()`).
+    /// As defence in depth we also require whisper.cpp's stable `Server:
+    /// whisper.cpp` response header (present even on 404s), so a bare "any HTTP
+    /// responder" no longer counts as ready.
     private func ping() -> Bool {
         guard let url = URL(string: "http://127.0.0.1:\(port)/") else { return false }
         var request = URLRequest(url: url)
@@ -162,7 +207,10 @@ final class WhisperServerManager: TranscriptionEngine {
         var reachable = false
         let semaphore = DispatchSemaphore(value: 0)
         URLSession.shared.dataTask(with: request) { _, response, _ in
-            reachable = response is HTTPURLResponse
+            if let http = response as? HTTPURLResponse,
+               let server = http.value(forHTTPHeaderField: "Server") {
+                reachable = server.lowercased().contains("whisper.cpp")
+            }
             semaphore.signal()
         }.resume()
         semaphore.wait()

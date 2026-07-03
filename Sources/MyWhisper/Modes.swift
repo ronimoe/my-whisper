@@ -98,8 +98,49 @@ enum Ollama {
         return content
     }
 
+    private struct VersionResponse: Decodable {
+        let version: String
+    }
+
+    /// Returns the version string only when `data` is a valid Ollama
+    /// `/api/version` payload — a JSON object with a String `version` field.
+    /// Returns nil for anything else (empty, non-JSON, HTML, `{"error":…}`,
+    /// `{}`, or a non-string `version`). Pure and deterministic; no network.
+    static func parseVersionResponse(_ data: Data) -> String? {
+        guard let decoded = try? JSONDecoder().decode(VersionResponse.self, from: data) else {
+            return nil
+        }
+        return decoded.version
+    }
+
+    /// Verifies the endpoint at `baseURL` actually speaks Ollama before we send
+    /// it any dictated/selected text: GET `/api/version` must return HTTP 200 AND
+    /// a body that decodes as Ollama's `{"version": String}` shape. Any other
+    /// responder on the port (or a network error) yields false.
+    static func probeIsOllama(baseURL: URL) async -> Bool {
+        let url = baseURL.appendingPathComponent("api/version")
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 5
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200 else {
+            return false
+        }
+        return parseVersionResponse(data) != nil
+    }
+
     static func rewrite(text: String, mode: Mode, defaultModel: String,
                          baseURL: URL) async throws -> String {
+        // Verify identity BEFORE posting any text: if some other process is
+        // squatting the Ollama port, refuse rather than leak the transcript
+        // (and any {selection}) to it. Callers catch this and fall back to
+        // pasting the raw transcript.
+        guard await probeIsOllama(baseURL: baseURL) else {
+            throw ResponseError(
+                message: "AI-mode endpoint at \(baseURL.absoluteString) did not identify as Ollama; "
+                    + "refusing to send text")
+        }
+
         var request = chatRequest(baseURL: baseURL, model: mode.model ?? defaultModel,
                                   systemPrompt: mode.prompt, userText: text)
         request.timeoutInterval = 15
