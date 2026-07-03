@@ -272,6 +272,8 @@ final class Settings {
     static let languages: [(code: String, name: String)] = [
         ("auto", "Auto-detect"),
         ("mixed", "Mixed (Indonesian + English)"),
+        ("mixed-tl", "Mixed (Tagalog + English)"), ("mixed-hi", "Mixed (Hindi + English)"),
+        ("mixed-es", "Mixed (Spanish + English)"), ("mixed-zh", "Mixed (Chinese + English)"),
         ("en", "English"), ("id", "Indonesian"), ("zh", "Chinese"), ("es", "Spanish"),
         ("fr", "French"), ("de", "German"), ("ja", "Japanese"), ("ko", "Korean"),
         ("pt", "Portuguese"), ("ru", "Russian"), ("ar", "Arabic"), ("hi", "Hindi"),
