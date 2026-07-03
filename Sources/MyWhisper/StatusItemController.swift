@@ -11,6 +11,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     var onToggleDictation: (() -> Void)?
+    var onCancelDictation: (() -> Void)?
     var onSelectLanguage: ((String) -> Void)?
     var onSelectModel: ((URL) -> Void)?
     var onSelectEngine: ((String) -> Void)?
@@ -111,6 +112,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         toggle.target = self
         toggle.isEnabled = toggleEnabled
         menu.addItem(toggle)
+
+        if case .recording = status {
+            let cancel = NSMenuItem(title: "Cancel Dictation (Esc)",
+                                    action: #selector(cancelDictation), keyEquivalent: "")
+            cancel.target = self
+            menu.addItem(cancel)
+        }
         menu.addItem(.separator())
 
         let languageItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
@@ -258,6 +266,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc private func toggleDictation() { onToggleDictation?() }
+
+    @objc private func cancelDictation() { onCancelDictation?() }
 
     private func buildModeMenu() -> NSMenu {
         let submenu = NSMenu()

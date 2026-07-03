@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusController.onToggleDictation = { [weak self] in self?.toggleDictation() }
+        statusController.onCancelDictation = { [weak self] in self?.cancelDictation() }
         statusController.onSelectLanguage = { code in Settings.shared.language = code }
         statusController.onSelectModel = { [weak self] url in
             Settings.shared.modelPath = url.path
@@ -38,6 +39,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKeys.onHotKeyUp = { [weak self] in self?.hotKeyUp() }
         hotKeys.register(keyCode: Settings.shared.hotKeyCode,
                          modifiers: Settings.shared.hotKeyModifiers)
+        hotKeys.onSecondaryDown = { [weak self] in self?.cancelDictation() }
+
+        RecordingPill.shared.levelProvider = { [weak self] in self?.recorder.currentLevel ?? 0 }
+        RecordingPill.shared.onCancel = { [weak self] in self?.cancelDictation() }
 
         recorder.onAutoStop = { [weak self] in
             guard self?.recorder.isRecording == true else { return }
@@ -55,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        hotKeys.unregisterSecondary()
         engine?.stop()
     }
 
@@ -110,7 +116,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func restartServer() {
         stopPreviewTimer()
-        if recorder.isRecording { _ = recorder.stop() }
+        if recorder.isRecording {
+            _ = recorder.stop()
+            hotKeys.unregisterSecondary()
+            RecordingPill.shared.hide()
+        }
         engine?.stop()
         engine = nil
         startServer()
@@ -163,6 +173,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try recorder.start()
             statusController.setStatus(.recording)
             if Settings.shared.soundCues { NSSound(named: "Pop")?.play() }
+            RecordingPill.shared.show()
+            hotKeys.registerSecondary(keyCode: 53, modifiers: 0) // Escape, only while recording
             if Settings.shared.livePreviewEnabled {
                 startPreviewTimer()
             }
@@ -188,7 +200,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         previewTask?.cancel()
         previewTask = nil
         previewInFlight = false
-        PreviewHUD.shared.hide()
     }
 
     private func previewTick() {
@@ -216,7 +227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if self.recorder.isRecording, let raw {
                     let text = Postprocess.clean(raw)
                     if !text.isEmpty {
-                        PreviewHUD.shared.update(text: text)
+                        RecordingPill.shared.update(text: text)
                     }
                 }
             }
@@ -225,6 +236,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func finishDictation() {
         stopPreviewTimer()
+        RecordingPill.shared.hide()
+        hotKeys.unregisterSecondary()
         let samples = recorder.stop()
         if Settings.shared.soundCues { NSSound(named: "Tink")?.play() }
         guard samples.count > 3200 else { // ignore recordings under 0.2 s
@@ -300,5 +313,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    /// Aborts the in-progress recording: discards the captured samples (no
+    /// transcription, no paste, no history) and resets to idle.
+    func cancelDictation() {
+        guard recorder.isRecording else { return }
+        stopPreviewTimer()
+        _ = recorder.stop()
+        if Settings.shared.soundCues { NSSound(named: "Basso")?.play() }
+        RecordingPill.shared.hide()
+        hotKeys.unregisterSecondary()
+        statusController.setStatus(.idle)
+        pressStartedRecording = false
+        lastPressDate = nil
     }
 }
