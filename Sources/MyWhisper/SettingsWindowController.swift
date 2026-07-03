@@ -160,7 +160,16 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         modelPopup = NSPopUpButton()
         modelPopup.target = self
         modelPopup.action = #selector(selectModel)
-        stack.addArrangedSubview(popupRow(label: "Model:", popup: modelPopup))
+        let modelRow = NSStackView()
+        modelRow.orientation = .horizontal
+        modelRow.spacing = 8
+        modelRow.alignment = .centerY
+        modelRow.addArrangedSubview(popupRow(label: "Model:", popup: modelPopup))
+        let downloadModelButton = NSButton(title: "Download…", target: self,
+                                           action: #selector(openModelDownloader))
+        downloadModelButton.bezelStyle = .rounded
+        modelRow.addArrangedSubview(downloadModelButton)
+        stack.addArrangedSubview(modelRow)
 
         modePopup = NSPopUpButton()
         modePopup.target = self
@@ -374,6 +383,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     @objc private func openModelsFolder() {
         NSWorkspace.shared.open(Settings.modelsDir)
+    }
+
+    @objc private func openModelDownloader() {
+        OnboardingWindowController.shared.show()
     }
 
     @objc private func editReplacements() {

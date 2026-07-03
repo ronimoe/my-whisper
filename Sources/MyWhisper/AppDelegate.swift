@@ -35,6 +35,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SettingsWindowController.shared.onChangeHotKey = { [weak self] in self?.beginHotKeyCapture() }
         SettingsWindowController.shared.onModelChanged = { [weak self] in self?.restartServer() }
 
+        statusController.onOpenOnboarding = { OnboardingWindowController.shared.show() }
+        OnboardingWindowController.shared.onModelReady = { [weak self] in self?.restartServer() }
+
         hotKeys.onHotKeyDown = { [weak self] in self?.hotKeyDown() }
         hotKeys.onHotKeyUp = { [weak self] in self?.hotKeyUp() }
         hotKeys.register(keyCode: Settings.shared.hotKeyCode,
@@ -57,6 +60,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         TextInserter.promptForAccessibilityIfNeeded()
         startServer()
+
+        if !Settings.shared.hasCompletedOnboarding {
+            OnboardingWindowController.shared.show()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -88,9 +95,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         engine.onStateChange = { [weak self] state in
             DispatchQueue.main.async {
                 switch state {
-                case .ready: self?.statusController.setStatus(.idle)
-                case .failed(let message): self?.statusController.setStatus(.error(message))
-                case .starting, .stopped: break
+                case .ready:
+                    self?.statusController.setStatus(.idle)
+                    OnboardingWindowController.shared.setEngineStatus("Ready — dictate away!")
+                case .failed(let message):
+                    self?.statusController.setStatus(.error(message))
+                    OnboardingWindowController.shared.setEngineStatus(message)
+                case .starting:
+                    OnboardingWindowController.shared.setEngineStatus("Loading model…")
+                case .stopped: break
                 }
             }
         }

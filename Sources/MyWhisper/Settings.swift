@@ -28,6 +28,7 @@ final class Settings {
         case currentModeName
         case ollamaModel
         case ollamaBaseURL
+        case hasCompletedOnboarding
     }
 
     /// Restricts a directory (which may already exist from before this
@@ -174,6 +175,13 @@ final class Settings {
             return fallback
         }
         return url
+    }
+
+    /// Whether the first-run onboarding wizard has been completed. Default
+    /// false so new installs see it once; the "Done" button sets it true.
+    var hasCompletedOnboarding: Bool {
+        get { defaults.object(forKey: Key.hasCompletedOnboarding.rawValue) as? Bool ?? false }
+        set { defaults.set(newValue, forKey: Key.hasCompletedOnboarding.rawValue) }
     }
 
     func availableModels() -> [URL] {

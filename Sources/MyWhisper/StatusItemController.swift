@@ -16,6 +16,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     var onSelectModel: ((URL) -> Void)?
     var onSelectEngine: ((String) -> Void)?
     var onChangeHotKey: (() -> Void)?
+    var onOpenOnboarding: (() -> Void)?
     /// Supplies the live mic level (0…1) for the recording animation.
     var levelProvider: (() -> Float)?
 
@@ -200,6 +201,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(logItem)
 
         menu.addItem(.separator())
+        let setupItem = NSMenuItem(title: "Setup Assistant…", action: #selector(openOnboarding), keyEquivalent: "")
+        setupItem.target = self
+        menu.addItem(setupItem)
+
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
@@ -383,6 +388,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func openSettings() {
         SettingsWindowController.shared.show()
+    }
+
+    @objc private func openOnboarding() {
+        onOpenOnboarding?()
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
