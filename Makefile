@@ -1,13 +1,15 @@
 MODEL ?= large-v3-turbo
+XCODE_DEVELOPER_DIR ?= /Applications/Xcode.app/Contents/Developer
 
-.PHONY: build app run model deps clean test
+.PHONY: build app run model deps dist clean test
 
 build:
 	swift build -c release
 
 # XCTest needs the full Xcode toolchain; Command Line Tools alone lacks it.
+# Override for a non-default Xcode, e.g. make test XCODE_DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
 test:
-	DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test
+	DEVELOPER_DIR=$(XCODE_DEVELOPER_DIR) swift test
 
 app: build
 	./scripts/make-app.sh
