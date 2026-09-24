@@ -2,12 +2,11 @@
 
 **Private, on-device voice dictation for macOS that understands how people actually talk, including when they switch between two languages mid-sentence.**
 
-<!--
-  Screenshot / GIF placeholder. Record a short clip of the menu bar, the
-  recording pill, and text landing in another app, save it as
-  docs/images/demo.gif, then replace this comment with:
-  ![MyWhisper dictating into another app](docs/images/demo.gif)
--->
+<p align="center">
+  <img src="docs/images/demo.gif" width="720"
+       alt="Illustration: press Option-Space, say a mixed Indonesian and English sentence, watch the live preview in the recording pill, press Option-Space again, and the text is typed into the editor.">
+</p>
+<p align="center"><sub>Illustration of the flow, not a screen recording (regenerate with <code>scripts/demo/make-gif.sh</code>).</sub></p>
 
 Tap **⌥Space**, speak, tap again, and the text is typed into whatever app you're in. Speech recognition runs locally through [whisper.cpp](https://github.com/ggml-org/whisper.cpp). No account, no cloud, no telemetry.
 
