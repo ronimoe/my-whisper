@@ -44,3 +44,10 @@ the app makes are to itself (localhost). The included starter model
 means step 2 is optional; if you choose to download the full model,
 that one-time download fetches from Hugging Face — after that,
 everything is fully offline.
+
+CREDITS
+-------
+
+MIT licensed. Built on whisper.cpp / ggml (MIT) and OpenAI Whisper
+model weights (MIT). Full notices: MyWhisper.app → Show Package
+Contents → Contents/Resources/THIRD_PARTY_NOTICES.md

@@ -1,99 +1,123 @@
 # MyWhisper
 
-A macOS menu-bar app for local voice dictation: tap a hotkey, speak in any
-of ~100 languages, and the transcribed text is pasted into whatever app
-you're using. Speech recognition runs entirely on-device via whisper.cpp —
-no audio or text ever leaves your Mac.
+**Private, on-device voice dictation for macOS that understands how people actually talk, including when they switch between two languages mid-sentence.**
 
-Apple Silicon · macOS 13+ · free.
+<!--
+  Screenshot / GIF placeholder. Record a short clip of the menu bar, the
+  recording pill, and text landing in another app, save it as
+  docs/images/demo.gif, then replace this comment with:
+  ![MyWhisper dictating into another app](docs/images/demo.gif)
+-->
 
-## Key features
+Tap **⌥Space**, speak, tap again, and the text is typed into whatever app you're in. Speech recognition runs locally through [whisper.cpp](https://github.com/ggml-org/whisper.cpp). No account, no cloud, no telemetry.
 
-- **Global hotkey dictation** — tap to toggle, or hold to talk while held.
-- **~100 languages**, auto-detect, plus five **Mixed-language** code-switching
-  packs (Indonesian, Tagalog, Hindi, Spanish, Chinese + English).
-- **Live preview**, **voice commands**, **spoken punctuation**, and
-  **instant paste** (reuses the live preview to skip re-transcription).
-- **Per-app dictation profiles** — different language/mode/punctuation per
-  frontmost app.
-- **AI modes** — rewrite dictation as an email, message, or bullet notes via
-  a **local** Ollama model. Still fully offline.
-- **Self-learning corrections** — fix a transcript once in History, and
-  MyWhisper learns a reusable replacement rule.
-- **Two transcription engines** — a managed subprocess (default) or an
-  in-process backend — switchable from the menu.
-- **History, custom vocabulary, text replacements, translate-to-English,
-  file transcription, a CLI, and a Settings window (⌘,).**
-- **Private by design**, with a source-level test enforcing it — see
-  [PRIVACY.md](PRIVACY.md).
+Apple Silicon · macOS 13+ · free and open source (MIT)
 
-## Install — quick start
+## What makes it different
 
-**DMG (no developer tools needed):**
+- **Mixed-language packs for code-switching.** Five dedicated modes for speech that mixes English with **Indonesian, Tagalog, Hindi, Spanish, or Chinese** ("tolong follow up client besok"). Whisper normally assumes a single language per recording. Each pack pins the primary language and primes the decoder with a code-switched example, so the English words stay English instead of being mistranscribed.
+- **Fully on-device.** Audio goes to a `whisper-server` process the app launches on `127.0.0.1`, never to a remote service. After the one-time model download it works offline.
+- **Self-learning corrections.** Fix a transcript once in **History → Correct…** and MyWhisper derives a replacement rule from your edit, so the next dictation gets it right automatically.
+- **Local AI modes.** Optionally rewrite dictation as an **Email**, **Message**, or **Bullet Notes** using a model running in your own [Ollama](https://ollama.com). Before sending any text, the app checks that the endpoint on `127.0.0.1:11434` really is Ollama. If the AI step fails, you still get the raw transcript.
+- **Privacy enforced by a test.** [`NetworkAuditTests`](Tests/MyWhisperTests/NetworkAuditTests.swift) scans every source file and fails the build if a non-localhost URL appears anywhere except two pinned exceptions: the user-initiated model download from Hugging Face, and a "Get Ollama" link that opens in your browser. Details and limits are in [PRIVACY.md](PRIVACY.md).
 
-1. Open the DMG and drag **MyWhisper.app** into Applications.
-2. Open it. macOS shows **"MyWhisper.app" Not Opened** with only
-   *Move to Trash* / *Done* — this is Apple's standard warning for any
-   free app that isn't notarized ($99/yr developer account), not a
-   problem with the app. Click **Done** (not Move to Trash!), then
-   **System Settings → Privacy & Security → scroll down → Open Anyway**
-   and confirm. One time only.
-3. Grant **Microphone** and **Accessibility** when prompted (or via the
-   in-app Setup Assistant).
-4. Tap **⌥Space** and start dictating — a small starter model is bundled,
-   so it works immediately.
+## Everything else
 
-**Build from source:**
+- Tap to toggle, or hold the hotkey to talk while held. **Esc** cancels. The hotkey can be changed.
+- Auto-detect across Whisper's ~100 languages, or pin one of 22 common languages from the menu.
+- Live preview while you speak, plus **instant paste**, which reuses the preview to skip a second transcription pass.
+- Voice commands ("new line", "scratch that", …) and spoken punctuation.
+- Per-app profiles, for example Message mode in Slack and Email mode in Mail.
+- History, custom vocabulary, text replacements, and translate-to-English.
+- Transcribe audio files (wav/mp3/m4a) from the menu or the command line.
+- A first-run Setup Assistant that handles permissions and model downloads, and a Settings window (⌘,).
+- Two engines: the default `whisper-server` subprocess, or an experimental in-process `libwhisper`.
+
+## Install
+
+### Download (no developer tools needed)
+
+1. Download the latest `MyWhisper-x.y.z.dmg` from [Releases](https://github.com/ronimoe/my-whisper/releases/latest).
+2. Open the DMG and drag **MyWhisper.app** into **Applications**.
+3. Open it. macOS shows **"MyWhisper.app" Not Opened** with only *Move to Trash* and *Done*. This is Apple's standard warning for any app that isn't notarized (notarization requires a $99/yr developer account); it doesn't mean the app is broken. To open it anyway:
+   - Click **Done**, **not** *Move to Trash*.
+   - Open **System Settings → Privacy & Security**, scroll to the bottom, click **Open Anyway** next to the MyWhisper message, and confirm (macOS may ask for your password or Touch ID).
+   - You only need to do this once.
+4. Grant **Microphone** and **Accessibility** access when the Setup Assistant asks. Accessibility is what lets it type into other apps.
+5. Tap **⌥Space** and start talking. A small starter model ships inside the app, so this works right away. The Setup Assistant offers the larger, more accurate `large-v3-turbo` model (1.5 GB) as an optional download.
+
+### Build from source
+
+Requirements: Apple Silicon Mac, macOS 13+, [Homebrew](https://brew.sh), and Xcode or the Command Line Tools (running the tests needs full Xcode).
 
 ```sh
-brew install whisper-cpp   # transcription engine
-make model                 # download the recommended speech model
-make run                   # build MyWhisper.app and launch it
+git clone https://github.com/ronimoe/my-whisper.git
+cd my-whisper
+brew install whisper-cpp   # transcription engine + library
+make model                 # download the recommended model (~1.5 GB)
+make run                   # build build/MyWhisper.app and launch it
 ```
 
-Full walkthroughs (permissions, the Setup Assistant, every menu item and
-setting) are in the [User Guide](docs/USER-GUIDE.md).
+The source build is ad-hoc signed, so macOS asks you to grant Accessibility again after each rebuild. Other useful targets:
 
-## Documentation
+```sh
+make test                                            # run the test suite (needs full Xcode)
+.build/release/MyWhisper --transcribe clip.m4a       # headless CLI transcription
+```
 
-| Doc | What's in it |
-|---|---|
-| [docs/USER-GUIDE.md](docs/USER-GUIDE.md) | Complete beginner-friendly guide: install, first dictation, every menu item and setting, languages, voice commands, AI modes, history, the CLI, troubleshooting |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design for developers: data flow, the two engines, concurrency model, file/permission model, source-file map, test strategy |
-| [docs/PRODUCT.md](docs/PRODUCT.md) | Vision, differentiators, target users, shipped feature inventory, roadmap, open decisions |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Build prerequisites, every Makefile target, scripts reference, conventions, how-to recipes for common changes |
-| [docs/RELEASE.md](docs/RELEASE.md) | How to build and ship a DMG, free and notarized |
-| [docs/PORTING.md](docs/PORTING.md) | Honest scoping for a Windows/Linux port |
-| [docs/IPAD.md](docs/IPAD.md) | Honest scoping for an iPad app: what ports, what's a rewrite, the keyboard-extension memory wall |
-| [PRIVACY.md](PRIVACY.md) | What runs where, what never happens, how it's checked |
-| [LICENSE](LICENSE) | MIT license |
-| [todos.md](todos.md) | Pending verifications and future-release ideas |
+To build a self-contained DMG like the release (vendored `whisper-server` plus bundled starter model), see [docs/RELEASE.md](docs/RELEASE.md).
+
+## How it works
+
+```
+hotkey ─▶ record mic (AVAudioEngine, 16 kHz mono)
+       ─▶ whisper-server on 127.0.0.1 (whisper.cpp, Metal)   ── language / Mixed pack prompt
+       ─▶ post-processing: your replacement rules, voice commands, spoken punctuation
+       ─▶ optional AI mode via local Ollama (127.0.0.1:11434)
+       ─▶ typed into the frontmost app (Accessibility)
+```
+
+Models live in `~/Library/Application Support/MyWhisper/models/`. History, settings, and rules are plain files in the same folder, readable only by your user account. The full design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Models
 
 | Model | Size | Multilingual quality | Notes |
 |---|---|---|---|
-| tiny / base | 75–142 MB | poor | quick tests only |
-| small | 466 MB | okay | fast on any machine |
+| small (q5_1) | 181 MB | okay | bundled starter in the DMG |
 | medium | 1.5 GB | good | |
-| large-v3-turbo | 1.5 GB | near-best | **recommended default**, bundled starter is a smaller sibling |
-| large-v3 | 2.9 GB | best | slower; the only tier that can translate |
+| large-v3-turbo | 1.5 GB | near-best | **recommended** |
+| large-v3 | 2.9 GB | best | slower; use this (or medium) for Translate-to-English |
 
-Download with `make model MODEL=<name>` or the in-app Setup Assistant.
-Quantized variants (e.g. `large-v3-turbo-q5_0`) trade a little accuracy for
-less RAM. `large-v3-turbo` **cannot translate** — use `large-v3`/`medium`
-for the Translate-to-English toggle.
+Download with `make model MODEL=<name>` or from the Setup Assistant. `large-v3-turbo` cannot translate.
+
+## Documentation
+
+| Doc | Contents |
+|---|---|
+| [User Guide](docs/USER-GUIDE.md) | Every menu item and setting, languages, voice commands, AI modes, CLI, troubleshooting |
+| [Architecture](docs/ARCHITECTURE.md) | Data flow, engines, concurrency, file/permission model, test strategy |
+| [Development](docs/DEVELOPMENT.md) | Makefile targets, scripts, conventions, how-to recipes |
+| [Product](docs/PRODUCT.md) | Vision, feature inventory, roadmap |
+| [Release](docs/RELEASE.md) | Building and shipping the DMG |
+| [Porting](docs/PORTING.md) / [iPad](docs/IPAD.md) | Scoping for other platforms |
+| [Privacy](PRIVACY.md) | What runs where, and how it's checked |
 
 ## Testing
 
-**310 tests** pass via `make test` (needs the full Xcode toolchain —
-`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`; the bare Command
-Line Tools lack XCTest). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#test-strategy)
-for the test strategy.
+310 XCTest tests across 25 test files, run with `make test`. They cover the dictation pipeline, the Mixed-language packs, corrections, AI-mode fallbacks, settings, and the network audit. See [ARCHITECTURE.md § test strategy](docs/ARCHITECTURE.md#test-strategy).
 
-## Privacy
+## Contributing and security
 
-Everything runs on-device — speech recognition and AI-mode rewriting both
-talk only to `127.0.0.1`, and a source-level test fails the build if any
-other network endpoint appears in the app. Full details in
-[PRIVACY.md](PRIVACY.md). MIT licensed.
+Contributions are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). To report a vulnerability, use GitHub private vulnerability reporting as described in [SECURITY.md](SECURITY.md).
+
+## License and credits
+
+MyWhisper is released under the [MIT License](LICENSE). Copyright (c) 2026 Roni Moe.
+
+It builds on:
+
+- [whisper.cpp](https://github.com/ggml-org/whisper.cpp) and ggml by the ggml authors (MIT). The release DMG bundles `whisper-server`.
+- [OpenAI Whisper](https://github.com/openai/whisper) model weights (MIT), in the ggml conversions [hosted on Hugging Face](https://huggingface.co/ggerganov/whisper.cpp). The release DMG bundles the small starter model.
+- [Ollama](https://ollama.com) (MIT), optional and installed separately, for AI modes.
+
+Full license texts are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and inside the app bundle.

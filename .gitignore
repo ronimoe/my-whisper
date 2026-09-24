@@ -1,4 +1,24 @@
+# SwiftPM / Xcode build output
 .build/
 build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/xcuserdata/
+
+# Vendored whisper.cpp checkout + cached starter model (make deps / make dist)
 vendor/
+
+# Whisper models and release images: downloaded or built, never committed
+*.bin
+*.dmg
+*.part
+
+# macOS
 .DS_Store
+
+# Local secrets, never committed
+.env
+.env.*
+*.p12
+*.cer
+*.mobileprovision
