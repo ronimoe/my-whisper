@@ -12,6 +12,9 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/bin"
 cp "$BIN" "$APP/Contents/MacOS/MyWhisper"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+# License + attributions travel with every copy of the app (MIT requires it
+# for the bundled whisper-server and model).
+cp LICENSE THIRD_PARTY_NOTICES.md "$APP/Contents/Resources/"
 
 # Bundle a self-contained whisper-server if a vendored static build exists;
 # otherwise the app falls back to the Homebrew binary at runtime.
